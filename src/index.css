@@ -130,7 +130,7 @@ body {
   align-items: center;
   justify-content: center;
   flex: 1;
-  height: 100vh;
+  height: 100%;
   color: #64748b;
   font-size: 0.95rem;
 }
@@ -636,13 +636,34 @@ body {
 
 .journey-node {
   min-width: 104px;
-  max-width: 132px;
+  max-width: 148px;
   padding: 0.28rem 0.4rem;
   border-radius: 7px;
   border: 1px solid #e2e8f0;
   background: #fff;
   box-shadow: 0 1px 2px rgb(15 23 42 / 0.06);
   font-size: 0.65rem;
+}
+
+.journey-node__row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.35rem;
+}
+
+.journey-node__icon {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.1rem;
+  height: 1.1rem;
+  line-height: 1;
+  font-size: 0.7rem;
+}
+
+.journey-node__text {
+  min-width: 0;
 }
 
 .journey-node__title {
@@ -693,4 +714,16 @@ body {
 .journey-node--email {
   border-color: #f97316;
   background: #fff7ed;
+}
+
+.journey-node--entry-read-audience,
+.journey-node--entry-audience-qualification {
+  border-color: #3b82f6;
+  background: #eff6ff;
+}
+
+.journey-node--entry-unitary-event,
+.journey-node--entry-business-event {
+  border-color: #16a34a;
+  background: #f0fdf4;
 }

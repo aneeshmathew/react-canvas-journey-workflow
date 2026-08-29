@@ -1,5 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { JourneyNodeData } from "@/lib/journeySchema";
+import { isEntryNodeType } from "@/lib/journeySchema";
 import { simulateJourney } from "@/lib/simulateJourney";
 
 export type JourneyValidationResult = {
@@ -18,7 +19,7 @@ function add(map: Record<string, string[]>, id: string, message: string) {
 
 /**
  * Validates journey structure, unique labels, required fields per node type,
- * reachability from Start, and a complete path from Start to End.
+ * reachability from the entry point, and a complete path from entry to End.
  */
 export function validateJourney(
   nodes: Node<JourneyNodeData>[],
@@ -27,16 +28,29 @@ export function validateJourney(
   const byNode: Record<string, string[]> = {};
   const global: string[] = [];
 
-  const starts = nodes.filter((n) => n.type === "start");
+  const entries = nodes.filter((n) => isEntryNodeType(n.type));
   const ends = nodes.filter((n) => n.type === "end");
 
-  if (starts.length === 0) {
-    global.push("Add exactly one Start node.");
+  if (entries.length === 0) {
+    global.push(
+      "Add exactly one entry point (Read Audience, Audience Qualification, Unitary Event, or Business Event).",
+    );
   }
-  if (starts.length > 1) {
-    global.push("Only one Start node is allowed.");
-    for (const s of starts) {
-      add(byNode, s.id, "Journey must have a single Start node.");
+  if (entries.length > 1) {
+    global.push("Only one entry point is allowed.");
+    for (const s of entries) {
+      add(byNode, s.id, "Journey must have a single entry point.");
+    }
+  }
+  for (const s of entries) {
+    const hasIncoming = edges.some((e) => e.target === s.id);
+    if (hasIncoming) {
+      add(
+        byNode,
+        s.id,
+        "Entry points can't have incoming connections — nothing may lead into the start of a journey.",
+      );
+      global.push("The entry point has an incoming connection — remove it.");
     }
   }
 
@@ -74,13 +88,17 @@ export function validateJourney(
 
     switch (n.type) {
       case "audience":
+      case "entry-read-audience":
+      case "entry-audience-qualification":
         if (!String(n.data.segmentHint ?? "").trim()) {
-          add(byNode, n.id, "Segment hint is required.");
+          add(byNode, n.id, "Audience is required.");
         }
         break;
       case "event":
+      case "entry-unitary-event":
+      case "entry-business-event":
         if (!String(n.data.eventKey ?? "").trim()) {
-          add(byNode, n.id, "Event key is required.");
+          add(byNode, n.id, "Event is required.");
         }
         break;
       case "email":
@@ -93,16 +111,16 @@ export function validateJourney(
     }
   }
 
-  if (starts.length === 1) {
-    const startId = starts[0]!.id;
+  if (entries.length === 1) {
+    const entryId = entries[0]!.id;
     const reachable = new Set<string>();
     const adj = new Map<string, string[]>();
     for (const e of edges) {
       if (!adj.has(e.source)) adj.set(e.source, []);
       adj.get(e.source)!.push(e.target);
     }
-    reachable.add(startId);
-    const stack = [startId];
+    reachable.add(entryId);
+    const stack = [entryId];
     while (stack.length) {
       const id = stack.pop()!;
       for (const t of adj.get(id) ?? []) {
@@ -114,12 +132,16 @@ export function validateJourney(
     }
     for (const n of nodes) {
       if (!reachable.has(n.id)) {
-        add(byNode, n.id, "Not reachable from Start — connect this node.");
+        add(
+          byNode,
+          n.id,
+          "Not reachable from the entry point — connect this node.",
+        );
       }
     }
   }
 
-  if (starts.length === 1 && ends.length === 1) {
+  if (entries.length === 1 && ends.length === 1) {
     const sim = simulateJourney(nodes, edges);
     if (!sim.ok) {
       global.push(sim.error);

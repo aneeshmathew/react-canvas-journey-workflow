@@ -86,9 +86,11 @@ export function Inspector({
           onChange(selected.id, { subtitle: e.target.value || undefined })
         }
       />
-      {kind === "audience" ? (
+      {kind === "audience" ||
+      kind === "entry-read-audience" ||
+      kind === "entry-audience-qualification" ? (
         <>
-          <label htmlFor="seg">Segment hint</label>
+          <label htmlFor="seg">Audience</label>
           <input
             id="seg"
             list="audience-catalog"
@@ -104,9 +106,11 @@ export function Inspector({
           </datalist>
         </>
       ) : null}
-      {kind === "event" ? (
+      {kind === "event" ||
+      kind === "entry-unitary-event" ||
+      kind === "entry-business-event" ? (
         <>
-          <label htmlFor="ev">Event key</label>
+          <label htmlFor="ev">Event</label>
           <input
             id="ev"
             list="event-catalog"

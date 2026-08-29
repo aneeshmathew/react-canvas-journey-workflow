@@ -7,6 +7,7 @@ function resetStore() {
     nodes: [],
     edges: [],
     journeyName: "Untitled journey",
+    journeyDescription: "",
     viewport: undefined,
     selectedId: null,
     hydrated: false,
@@ -61,7 +62,7 @@ describe("journeyStore", () => {
     });
     useJourneyStore.getState().connectEdge({
       id: "e1",
-      source: "start-1",
+      source: "entry-1",
       target: "n2",
     });
     expect(useJourneyStore.getState().edges).toHaveLength(1);

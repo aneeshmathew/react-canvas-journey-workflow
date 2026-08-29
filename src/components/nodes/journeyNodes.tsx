@@ -1,6 +1,23 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { useNodeValidation } from "@/hooks/useNodeValidation";
-import type { JourneyNodeData, JourneyNodeType } from "@/lib/journeySchema";
+import type {
+  EntryNodeType,
+  JourneyNodeData,
+  JourneyNodeType,
+} from "@/lib/journeySchema";
+import { ENTRY_NODE_LABELS } from "@/lib/journeySchema";
+
+const ICONS: Partial<Record<JourneyNodeType, string>> = {
+  "entry-read-audience": "👥",
+  "entry-audience-qualification": "🎯",
+  "entry-unitary-event": "🌐",
+  "entry-business-event": "📣",
+  audience: "👥",
+  event: "⚡",
+  email: "✉️",
+  end: "🏁",
+  start: "🌐",
+};
 
 function Base({
   kind,
@@ -27,8 +44,17 @@ function Base({
       {target ? (
         <Handle type="target" position={Position.Left} id="in" />
       ) : null}
-      <div className="journey-node__title">{title}</div>
-      {subtitle ? <div className="journey-node__sub">{subtitle}</div> : null}
+      <div className="journey-node__row">
+        <span className="journey-node__icon" aria-hidden="true">
+          {ICONS[kind] ?? "◆"}
+        </span>
+        <div className="journey-node__text">
+          <div className="journey-node__title">{title}</div>
+          {subtitle ? (
+            <div className="journey-node__sub">{subtitle}</div>
+          ) : null}
+        </div>
+      </div>
       {source ? (
         <Handle type="source" position={Position.Right} id="out" />
       ) : null}
@@ -41,20 +67,28 @@ function validationTooltip(ok: boolean, messages: string[]): string {
   return messages.join("\n");
 }
 
-type Start = Node<JourneyNodeData, "start">;
+type EntryNodeReactType = Node<JourneyNodeData, EntryNodeType>;
 type End = Node<JourneyNodeData, "end">;
 type Audience = Node<JourneyNodeData, "audience">;
 type Ev = Node<JourneyNodeData, "event">;
 type Email = Node<JourneyNodeData, "email">;
 
-export function StartNode(props: NodeProps<Start>) {
+/**
+ * Renders any of the four entry-point activities (see `ENTRY_NODE_TYPES`).
+ * One component covers all four kinds since they only differ in icon,
+ * default subtitle, and which data field (`segmentHint` vs `eventKey`)
+ * they collect — see `Inspector.tsx` for the per-kind field switch.
+ */
+export function EntryNode(props: NodeProps<EntryNodeReactType>) {
   const d = props.data;
   const { ok, messages } = useNodeValidation(props.id);
+  const kind = props.type;
+  const defaults = ENTRY_NODE_LABELS[kind];
   return (
     <Base
-      kind="start"
-      title={d.label || "Start"}
-      subtitle={d.subtitle}
+      kind={kind}
+      title={d.label || defaults.label}
+      subtitle={d.subtitle ?? defaults.subtitle}
       source
       ok={ok}
       validationTitle={validationTooltip(ok, messages)}

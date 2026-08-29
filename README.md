@@ -253,11 +253,18 @@ Phased so each phase ships something usable. Architecture work (Phase 0) is fron
 
 Verified: `npx tsc -b`, `npm run build`, `npm run lint`, and `npm run test` all pass clean as of this phase.
 
-### Phase 1 — Journey properties + entry points + shell layout
-- [ ] Add a **Journey Properties** panel (name, description, entry type selection) shown before/alongside canvas design, per AJO's "Create" step
-- [ ] Extend `JourneyNodeType` to distinguish **entry** activities from mid-journey activities: `entry-read-audience`, `entry-audience-qualification`, `entry-unitary-event`, `entry-business-event`
-- [ ] Enforce "exactly one entry node, and it must have no incoming edges" in `journeyValidation.ts` (extends existing single-start rule rather than replacing it)
-- [ ] Build the **UI layout reference (target)** described above: `AppShell` with a `Journeys`-only left nav rail, `JourneyEditorHeader` replacing the current toolbar, and the accordion `Palette.tsx` (`Events` / `Actions` groups with search) — this is the concrete, screenshot-matched version of "group the palette into categories" and should be treated as the Phase 1 UI deliverable, not a separate effort
+### Phase 1 — Journey properties + entry points + shell layout ✅ implemented
+- [x] Add a **Journey Properties** panel (name + description), toggled from the header's ⓘ icon. Scope decision: entry-type selection is *not* in this panel — in AJO's actual model the entry point is the first canvas activity (dragged from the Events palette), not a properties-dialog field, so putting it in both places would just create two conflicting ways to set the same thing. See `JourneyPropertiesPanel.tsx`.
+- [x] Extended `JourneyNodeType` with `entry-read-audience`, `entry-audience-qualification`, `entry-unitary-event`, `entry-business-event` (`journeySchema.ts`). One `EntryNode` component renders all four (`journeyNodes.tsx`), reusing the existing `segmentHint`/`eventKey` data fields rather than inventing new ones. Old `"start"` node type is kept as a recognized-but-deprecated literal — `parseJourney` migrates it to `entry-unitary-event` on load, so previously saved/exported journeys keep working.
+- [x] `journeyValidation.ts` / `simulateJourney.ts` now key off `isEntryNodeType()` instead of `type === "start"`: exactly one entry point required, **and it must have no incoming edges** (new rule), plus per-kind required fields (audience for the two audience-based entries, event for the two event-based entries).
+- [x] Built the **UI layout reference (target)**: `AppShell` (`Journeys`-only left nav rail), `JourneyEditorHeader` (name, Draft/Version/saved status, Alerts count wired to real validation output, stubbed-and-disabled Manage access / Test mode, working Delete), and the accordion `Palette.tsx` (`Events` / `Actions` groups + search, with `End` pinned separately as structural, matching the "not a palette concept in AJO's own model" note). These are new Tailwind-based components; the old dark `.app-toolbar` CSS is kept for the secondary "authoring tools" row (Import/Export/Simulate/Dry run/Publish/Undo/Redo/Zoom) since those aren't part of AJO's actual chrome.
+
+Verified: `npx tsc -b`, `npm run build`, `npm run lint`, and `npm run test` all pass (21 tests) as of this phase.
+
+Known scope gaps carried forward on purpose (not silently dropped):
+- Palette item counts are real-but-small (6 Events, 1 Actions) since only a handful of node types exist yet — they'll grow as Phase 2/3 add Orchestration and more channels.
+- The "Back" arrow and "Manage access" in the header are visual-only; there's no journey list to go back to yet (that's a Phase 5 item) and no multi-user model in this tool.
+- Entry-node icons/colors are a first pass, not a pixel-accurate match to the screenshot.
 
 ### Phase 2 — Orchestration primitives (branching)
 - [ ] Add a **Condition** node type supporting multiple named outgoing branches (e.g. "Yes"/"No" or rule-based splits) — this is the single highest-value gap since `simulateJourney` currently can't express branching at all

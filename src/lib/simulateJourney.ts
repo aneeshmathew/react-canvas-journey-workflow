@@ -1,5 +1,6 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { JourneyNodeData } from "@/lib/journeySchema";
+import { isEntryNodeType } from "@/lib/journeySchema";
 
 export type SimulationResult =
   | {
@@ -10,19 +11,24 @@ export type SimulationResult =
   | { ok: false; error: string };
 
 /**
- * Walks left-to-right from the single Start node, following the first outgoing edge
- * at each branch (targets sorted by id). Detects cycles and dead ends.
+ * Walks left-to-right from the single entry-point node, following the first
+ * outgoing edge at each branch (targets sorted by id). Detects cycles and
+ * dead ends.
  */
 export function simulateJourney(
   nodes: Node<JourneyNodeData>[],
   edges: Edge[],
 ): SimulationResult {
-  const starts = nodes.filter((n) => n.type === "start");
-  if (starts.length === 0) {
-    return { ok: false, error: "Add a Start node to the canvas." };
+  const entries = nodes.filter((n) => isEntryNodeType(n.type));
+  if (entries.length === 0) {
+    return {
+      ok: false,
+      error:
+        "Add an entry point (Read Audience, Audience Qualification, Unitary Event, or Business Event) to the canvas.",
+    };
   }
-  if (starts.length > 1) {
-    return { ok: false, error: "Use a single Start node for simulation." };
+  if (entries.length > 1) {
+    return { ok: false, error: "Use a single entry point for simulation." };
   }
 
   const adj = new Map<string, string[]>();
@@ -37,7 +43,7 @@ export function simulateJourney(
 
   const nodeById = new Map(nodes.map((n) => [n.id, n]));
   const warnings: string[] = [];
-  let current = starts[0]!.id;
+  let current = entries[0]!.id;
   const pathIds: string[] = [];
   const visiting = new Set<string>();
 

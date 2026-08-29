@@ -24,18 +24,23 @@ import { ExecutionDryRunModal } from "@/components/ExecutionDryRunModal";
 import { Inspector } from "@/components/Inspector";
 import { InspectorLeavePrompt } from "@/components/InspectorLeavePrompt";
 import { PanelResizeHandle } from "@/components/PanelResizeHandle";
+import { AppShell } from "@/components/shell/AppShell";
+import { JourneyEditorHeader } from "@/components/shell/JourneyEditorHeader";
+import { JourneyPropertiesPanel } from "@/components/shell/JourneyPropertiesPanel";
 import {
   AudienceNode,
   EmailNode,
   EndNode,
+  EntryNode,
   EventNode,
-  StartNode,
 } from "@/components/nodes/journeyNodes";
 import { Palette } from "@/components/palette/Palette";
 import {
   defaultJourney,
+  isEntryNodeType,
   parseJourney,
   serializeJourney,
+  ENTRY_NODE_LABELS,
   type JourneyDocument,
   type JourneyNodeData,
   type JourneyNodeType,
@@ -53,7 +58,14 @@ import {
 } from "@/hooks/queries/useJourneyQueries";
 
 const nodeTypes = {
-  start: StartNode,
+  // Defensive fallback: any hand-crafted or pre-migration document that still
+  // has a literal "start" node renders fine — `parseJourney`/`defaultJourney`
+  // never produce one anymore (see journeySchema.ts).
+  start: EntryNode,
+  "entry-read-audience": EntryNode,
+  "entry-audience-qualification": EntryNode,
+  "entry-unitary-event": EntryNode,
+  "entry-business-event": EntryNode,
   audience: AudienceNode,
   event: EventNode,
   email: EmailNode,
@@ -61,9 +73,10 @@ const nodeTypes = {
 } satisfies NodeTypes;
 
 function defaultData(type: JourneyNodeType): JourneyNodeData {
+  if (isEntryNodeType(type)) {
+    return { ...ENTRY_NODE_LABELS[type] };
+  }
   switch (type) {
-    case "start":
-      return { label: "Start" };
     case "end":
       return { label: "End" };
     case "audience":
@@ -150,6 +163,7 @@ function FlowCanvas() {
   const nodes = useJourneyStore((s) => s.nodes);
   const edges = useJourneyStore((s) => s.edges);
   const journeyName = useJourneyStore((s) => s.journeyName);
+  const journeyDescription = useJourneyStore((s) => s.journeyDescription);
   const selectedId = useJourneyStore((s) => s.selectedId);
   const paletteWidth = useJourneyStore((s) => s.paletteWidth);
   const inspectorWidth = useJourneyStore((s) => s.inspectorWidth);
@@ -158,6 +172,7 @@ function FlowCanvas() {
 
   const hydrate = useJourneyStore((s) => s.hydrate);
   const setJourneyName = useJourneyStore((s) => s.setJourneyName);
+  const setJourneyDescription = useJourneyStore((s) => s.setJourneyDescription);
   const setStoreViewport = useJourneyStore((s) => s.setViewport);
   const onNodesChangeStore = useJourneyStore((s) => s.onNodesChange);
   const onEdgesChangeStore = useJourneyStore((s) => s.onEdgesChange);
@@ -178,6 +193,7 @@ function FlowCanvas() {
   const toDocument = useJourneyStore((s) => s.toDocument);
 
   const [error, setError] = useState<string | null>(null);
+  const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [inspectorNavPrompt, setInspectorNavPrompt] = useState<{
     nextId: string | null;
     fromNodeId: string;
@@ -484,14 +500,35 @@ function FlowCanvas() {
   return (
     <JourneyValidationProvider value={validation}>
       <>
-      <header className="app-toolbar">
-        <h1>Journey builder</h1>
-        <input
-          className="journey-name"
-          aria-label="Journey name"
-          value={journeyName}
-          onChange={(e) => setJourneyName(e.target.value)}
-        />
+      <JourneyEditorHeader
+        journeyName={journeyName}
+        onJourneyNameChange={setJourneyName}
+        isSaving={saveMutation.isPending}
+        alertsCount={
+          validation.global.length +
+          Object.values(validation.byNode).filter((m) => m.length > 0).length
+        }
+        onTogglePropertiesPanel={() => setPropertiesOpen((o) => !o)}
+        propertiesPanelOpen={propertiesOpen}
+        onDelete={() => {
+          if (
+            window.confirm(
+              "Clear this journey and start a new one? This can't be undone.",
+            )
+          ) {
+            newJourney();
+          }
+        }}
+      />
+      <JourneyPropertiesPanel
+        open={propertiesOpen}
+        name={journeyName}
+        description={journeyDescription}
+        onNameChange={setJourneyName}
+        onDescriptionChange={setJourneyDescription}
+        onClose={() => setPropertiesOpen(false)}
+      />
+      <div className="app-toolbar" role="toolbar" aria-label="Authoring tools">
         <button type="button" onClick={newJourney}>
           New
         </button>
@@ -515,7 +552,7 @@ function FlowCanvas() {
         >
           Export
         </button>
-        <button type="button" onClick={runSimulation} title="Walk Start → End in the graph">
+        <button type="button" onClick={runSimulation} title="Walk the entry point → End in the graph">
           Simulate path
         </button>
         <button
@@ -588,12 +625,7 @@ function FlowCanvas() {
             +
           </button>
         </div>
-        {saveMutation.isPending ? (
-          <span className="save-status" role="status">
-            Saving…
-          </span>
-        ) : null}
-      </header>
+      </div>
       <ValidationStatusBanner v={validation} />
       {error ? (
         <div className="error-banner" role="alert">
@@ -703,9 +735,9 @@ function FlowCanvas() {
 export function JourneyBuilder() {
   return (
     <ReactFlowProvider>
-      <div className="app-shell">
+      <AppShell>
         <FlowCanvas />
-      </div>
+      </AppShell>
     </ReactFlowProvider>
   );
 }

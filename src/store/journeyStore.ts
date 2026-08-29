@@ -59,6 +59,7 @@ type JourneyStoreState = {
   nodes: JourneyNode[];
   edges: Edge[];
   journeyName: string;
+  journeyDescription: string;
   viewport: JourneyDocument["viewport"];
   selectedId: string | null;
   hydrated: boolean;
@@ -76,6 +77,7 @@ type JourneyStoreState = {
 
   // --- journey-level ---
   setJourneyName: (name: string) => void;
+  setJourneyDescription: (description: string) => void;
   setViewport: (vp: JourneyDocument["viewport"]) => void;
 
   // --- graph mutation (React Flow wiring) ---
@@ -113,6 +115,7 @@ export const useJourneyStore = create<JourneyStoreState>((set, get) => ({
   nodes: [],
   edges: [],
   journeyName: "Untitled journey",
+  journeyDescription: "",
   viewport: undefined,
   selectedId: null,
   hydrated: false,
@@ -139,6 +142,7 @@ export const useJourneyStore = create<JourneyStoreState>((set, get) => ({
       nodes: doc.nodes,
       edges: doc.edges,
       journeyName: doc.meta?.name ?? "Untitled journey",
+      journeyDescription: doc.meta?.description ?? "",
       viewport: doc.viewport,
       selectedId: null,
       past: [],
@@ -149,6 +153,7 @@ export const useJourneyStore = create<JourneyStoreState>((set, get) => ({
   },
 
   setJourneyName: (name) => set({ journeyName: name }),
+  setJourneyDescription: (description) => set({ journeyDescription: description }),
   setViewport: (vp) => set({ viewport: vp }),
 
   onNodesChange: (changes) => {
@@ -301,10 +306,14 @@ export const useJourneyStore = create<JourneyStoreState>((set, get) => ({
   canRedo: () => get().future.length > 0,
 
   toDocument: () => {
-    const { nodes, edges, journeyName, viewport } = get();
+    const { nodes, edges, journeyName, journeyDescription, viewport } = get();
     return {
       version: JOURNEY_VERSION,
-      meta: { name: journeyName, updatedAt: new Date().toISOString() },
+      meta: {
+        name: journeyName,
+        description: journeyDescription,
+        updatedAt: new Date().toISOString(),
+      },
       nodes,
       edges,
       viewport,
