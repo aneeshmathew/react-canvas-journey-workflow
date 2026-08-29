@@ -2,18 +2,37 @@
 
 A **journey builder** web app: drag nodes from a palette onto a canvas, connect them, edit properties, validate the graph, simulate paths, and export or publish JSON. The UI is built with **React** and **React Flow** (@xyflow/react). Authoring happens entirely in this app; **n8n** is only a **planned runtime target** via a small stub compiler (see [n8n in this project](#n8n-in-this-project)).
 
+> **Status: mid-migration.** This project is being evolved toward an **Adobe Journey Optimizer (AJO)–style** orchestration canvas — see [Product direction: Adobe Journey Optimizer parity](#product-direction-adobe-journey-optimizer-parity) for the target feature set, [Target tech stack migration](#target-tech-stack-migration) for the React/TypeScript/TanStack Query/Zustand/Tailwind plan, and [Gap analysis](#gap-analysis-current-vs-adobe-journey-optimizer) + [Roadmap / TODOs](#roadmap--todos) for what's built vs. what's missing. Read those sections before making changes so new work lands in the right phase.
+
 ---
 
 ## Tech stack
+
+### Current (as shipped today)
 
 | Layer | Technology |
 |--------|------------|
 | UI | React 19, TypeScript |
 | Graph / canvas | [@xyflow/react](https://reactflow.dev/) v12 (`ReactFlow`, nodes, edges, viewport, controls, minimap) |
+| State | Local component state only — `useState` / `useNodesState` / `useEdgesState` inside `FlowCanvas`, plus one React Context (`JourneyValidationContext`) |
+| Styling | Hand-written CSS in `index.css` (BEM-ish class names, no design tokens/utility framework) |
+| Data fetching | None — everything is synchronous, in-memory, or `localStorage` |
 | Build | Vite 6, `@vitejs/plugin-react` |
 | Lint | ESLint 9, TypeScript ESLint, React Hooks plugin |
 
-Runtime dependencies are intentionally minimal: **only** `react`, `react-dom`, and `@xyflow/react`. There is no router, global state library, or UI kit.
+Runtime dependencies are intentionally minimal today: **only** `react`, `react-dom`, and `@xyflow/react`. There is no router, global state library, async data layer, or UI kit.
+
+### Target
+
+| Layer | Technology | Why |
+|--------|------------|-----|
+| UI | React 19, TypeScript (strict) | Unchanged — already in place |
+| Graph / canvas | `@xyflow/react` v12 | Unchanged — keep as the canvas engine |
+| **Global / canvas state** | **Zustand** | Replace ad-hoc `useState`/prop-drilling in `JourneyBuilder.tsx` (currently 769 lines) with a proper store: journey doc, selection, panel widths, validation, undo/redo. Matches the Zustand pattern React Flow's own docs recommend for non-trivial flows. |
+| **Server / async state** | **TanStack Query** | Introduce a real data layer: loading audiences/segments, events, message templates, saving/publishing journeys, dry-run + simulation results, journey list, analytics. Replaces bespoke `localStorage` autosave with a proper query/mutation + cache-invalidation model (still backed by a mock API layer to start). |
+| **Styling** | **Tailwind CSS** | Replace `index.css` globals with utility classes + design tokens (spacing, color, radius) so node/panel visuals can approach AJO's canvas look without hand-rolled CSS sprawl. |
+| Forms | (TBD — likely React Hook Form + Zod) | Inspector forms will grow substantially (per-channel schemas); needed for validation ergonomics. |
+| Testing | Vitest + React Testing Library | No tests exist today; required before deep refactors are safe. |
 
 ---
 
@@ -120,6 +139,152 @@ So: **authoring** = this UI; **running in production** = envisioned as importing
 | `journey-builder:last` | Last autosaved journey JSON |
 | `journey-builder:palette-width` | Palette panel width |
 | `journey-builder:inspector-width` | Properties panel width |
+
+---
+
+## Product direction: Adobe Journey Optimizer parity
+
+Reference: [Create your first journey — Adobe Journey Optimizer](https://experienceleague.adobe.com/en/docs/journey-optimizer/using/orchestrate-journeys/create-journey/journey-gs)
+
+AJO frames journey building as four stages, each with specific concepts this app should mirror:
+
+1. **Create** — define journey properties (name, description, priority/frequency-capping-style settings) before touching the canvas.
+2. **Design** — a palette split into three categories (**Events**, **Orchestration**, **Actions**), an entry point (audience- or event-based), branching/condition/wait activities, and channel actions (email, push, SMS, in-app, web, code-based, content card).
+3. **Test** — three distinct validation modes: **Simulation** (temporary synthetic users), **Test mode** (persistent test profiles), and **Dry run** (real production data, no real sends).
+4. **Publish** — journeys can't publish with errors; once live, they're monitored via reporting.
+
+### Entry-point model (AJO)
+
+| AJO entry type | Behavior | Current app equivalent |
+|---|---|---|
+| Read Audience | Batch audience, scheduled or one-shot | ❌ none — `audience` node exists but is a mid-journey node, not a true entry point with scheduling |
+| Audience Qualification | Real-time, profile enters/exits a streaming audience | ❌ none |
+| Unitary event | Real-time, one profile per trigger | Partial — `event` node exists but isn't scoped as an entry type |
+| Business event | Non-profile event fanning out to many profiles via implicit Read Audience | ❌ none |
+
+### Palette categories (AJO)
+
+- **Events** (entry + mid-journey signals)
+- **Orchestration** (Condition, Wait, Jump / sub-journey linking)
+- **Actions** (Email, Push, SMS, In-app, Web, Code-based experience, Content card, Custom action)
+
+The current app's palette is flat (`start`, `audience`, `event`, `email`, `end`) with no category grouping and no branching primitive at all.
+
+---
+
+## UI layout reference (target)
+
+Based directly on the AJO screenshot below, the target shell has **two distinct layout levels** that this app currently conflates/omits. This is scoped down from full AJO chrome — we are **not** rebuilding the entire admin console, only the pieces needed to frame the journey canvas.
+
+![AJO journey designer layout reference](reference/ajo-design-the-journey.png)
+
+### 1. Outer app shell — left nav rail
+
+AJO's left rail has many sections (Home, Campaigns, Journeys, Landing pages, Decision Management, Experience Decisioning, Content Management, Data Management, Connections, Customer, Privacy, Administration). **For this app, scope the left rail down to a single item: `Journeys`.** No other nav sections should be built now — they're explicitly out of scope until/unless a later phase calls for them.
+
+- [ ] Add an `AppShell` component with a slim left nav rail
+- [ ] Only nav item: **Journeys** (active/selected state) — everything else omitted, not just hidden
+- [ ] Journeys click → journey list (already partially planned in Phase 5) or directly into the journey editor for now
+
+### 2. Journey editor header (above the canvas)
+
+Matches the screenshot's top bar: back arrow, editable journey name (pencil icon), status row (`Journey` label · `Draft` · `Version 1 (Latest)` · save indicator, e.g. "Saved just now"), and right-aligned actions (`Alerts (n)`, `Manage access`, `Test mode`, `Delete`, primary action dropdown, info icon).
+
+- [ ] Add a `JourneyEditorHeader` component reflecting: journey name (editable inline), draft/published status, version label, autosave status text (replace the current toolbar bar in `JourneyBuilder.tsx`)
+- [ ] Right-side action cluster: Alerts (validation error/warning count — can source from `journeyValidation.ts` `global`/`byNode` counts), Test mode toggle, Delete, primary publish action
+- [ ] Not all of these need to be functional immediately — stub non-critical ones (e.g. "Manage access") behind disabled state so the layout matches without over-building
+
+### 3. Palette panel — accordion, not a flat list
+
+This is the key structural change to `Palette.tsx`. Per the screenshot, the palette is a **search + filter bar** above a set of **collapsible accordion groups**, each showing a count and expanding to individual draggable items:
+
+```
+[ 🔍 Search...            ] [ ⚗ filter ]
+> EVENTS (49)
+> ORCHESTRATION (3)
+> ACTIONS (23)
+```
+
+**Scope decision for this app (per current direction): only two accordion groups for now — `Events` and `Actions`.** Orchestration (Condition/Wait/Jump) stays tracked as a Phase 2 roadmap item (see above) but is **not** a palette accordion group yet — do not add an empty "Orchestration" accordion ahead of having orchestration node types to put in it.
+
+- [ ] Rebuild `Palette.tsx` as an accordion (`Events` / `Actions`), each collapsible independently, each showing an item count in its header (e.g. `EVENTS (2)`, `ACTIONS (1)` — counts reflect whatever node types actually exist today, not AJO's real numbers)
+- [ ] Add a search input above the accordion that filters items across both groups by label (client-side filter over the palette's static item list — no backend needed)
+- [ ] Nest existing node types under the right group: `audience`/`event` → **Events**; `email` → **Actions**. `start`/`end` are structural, not palette-draggable in AJO's model — keep them as an implicit canvas anchor rather than a palette entry, or place them in a small separate non-accordion section if a palette entry is still wanted
+- [ ] Each accordion item shows an icon + label + one-line subtitle (matching the canvas node card style, e.g. "LobbyBeacon / Unitary event") — reuse the same icon/label pairing between palette item and the node rendered on canvas for visual consistency
+
+### 4. Canvas node cards
+
+Note from the screenshot that canvas nodes render as a small card: icon (colored chip) + bold title (the instance name, e.g. "LobbyBeacon") + gray subtitle (the type, e.g. "Unitary event"). Condition nodes additionally show a labeled path segment (`Path1`) on the outgoing edge before it reaches the next action. Track this as a visual-parity item for `journeyNodes.tsx` once Phase 2/3 node types land — current node cards already follow a similar title/subtitle pattern, so this is a styling refinement (Tailwind tokens), not a structural change.
+
+---
+
+## Gap analysis: current vs. Adobe Journey Optimizer
+
+| Area | AJO capability | This app today | Gap |
+|---|---|---|---|
+| Journey properties | Dedicated config pane (name, description, priority, etc.) before design | Only a free-text journey name in the toolbar | **Large** — no properties panel/model |
+| Entry points | 4 distinct types (Read Audience, Audience Qualification, Unitary event, Business event), each with its own config UI | Single generic `audience`/`event` node, not distinguished as "entry" | **Large** |
+| Orchestration | Condition (branching), Wait (delay), Jump (sub-journey) | None. `simulateJourney` explicitly treats >1 outgoing edge as a warning and just picks one path — branching is actively unsupported | **Critical** — this is the biggest structural gap |
+| Actions / channels | Email, Push, SMS, In-app, Web, Code-based, Content card, Custom action | Only `email` (as a generic node with a template-name string) | **Large** |
+| Palette organization | 3 categories (Events / Orchestration / Actions) | Flat, uncategorized list of 5 node types | Medium |
+| Validation | Errors block publish; validation is channel/activity-aware | Structural validation exists (`journeyValidation.ts`): single start/end, unique labels, required fields, reachability, path simulation — solid foundation, but no per-channel schema validation | Medium (extend, don't replace) |
+| Testing | 3 modes: Simulation (synthetic users), Test mode (persistent test profiles), Dry run (real prod data, no sends) | One mode: `simulateJourney` walks a single deterministic path; `ExecutionDryRunModal` just displays that path. No profile concept, no "modes" distinction | **Large** |
+| Publish | Blocked on errors; produces a live, monitored journey | `publishBundle.ts` builds a JSON bundle (journey + n8n stub) gated on validity — good pattern, but nothing "goes live" or is monitored | Medium |
+| Reporting | Dedicated analytics/reporting views per journey | None | **Large** (likely out of scope for near-term phases; see Non-goals) |
+| Data model | Journeys reference real Audiences, Events, Data Sources, Custom Actions as first-class configured entities | `JourneyNodeData` is a flat bag of optional strings (`segmentHint`, `eventKey`, `templateName`) with no linkage to any catalog of audiences/events/templates | **Large** |
+| State management | N/A (product concern only) | Everything lives in local `useState` inside a 769-line `JourneyBuilder.tsx`; no undo/redo, no cross-component store | Architectural — blocks the above cleanly |
+| Async data | N/A (product concern only) | No data-fetching layer at all; autosave is synchronous `localStorage` | Architectural — needed once audiences/events/templates become "real" entities to fetch |
+| Styling system | N/A (product concern only) | Hand-written global CSS, no tokens/utilities | Architectural — needed to scale node/panel visual variety (8+ action types, 3 palette categories, condition branches) |
+
+---
+
+## Roadmap / TODOs
+
+Phased so each phase ships something usable. Architecture work (Phase 0) is front-loaded because branching, new node types, and async data all get much harder to retrofit later.
+
+### Phase 0 — Foundations (tech stack migration, no new product features)
+- [ ] Add Tailwind CSS; port `index.css` rules to utility classes / a small `@layer components` set for node chrome (keep visual output ~identical during this step)
+- [ ] Add Zustand; introduce a `useJourneyStore` holding `nodes`, `edges`, `meta`, `selection`, panel widths — migrate `FlowCanvas` state out of `useState` incrementally
+- [ ] Add TanStack Query (`@tanstack/react-query`) + a `QueryClientProvider` at the app root
+- [ ] Build a mock API module (in-memory or MSW) exposing: `listAudiences`, `listEvents`, `listMessageTemplates`, `getJourney`, `saveJourney`, `publishJourney` — this replaces direct `localStorage` calls with query/mutation hooks (`useQuery`/`useMutation`), even before there's a real backend
+- [ ] Move autosave from manual debounce in `lib/storage.ts` to a TanStack Query mutation with `onSuccess` cache updates
+- [ ] Add Vitest + React Testing Library; write baseline tests for `journeyValidation.ts` and `simulateJourney.ts` (pure functions — easiest first coverage) before refactoring around them
+- [ ] Introduce undo/redo at the store level (Zustand + a simple history middleware) — currently absent entirely
+
+### Phase 1 — Journey properties + entry points + shell layout
+- [ ] Add a **Journey Properties** panel (name, description, entry type selection) shown before/alongside canvas design, per AJO's "Create" step
+- [ ] Extend `JourneyNodeType` to distinguish **entry** activities from mid-journey activities: `entry-read-audience`, `entry-audience-qualification`, `entry-unitary-event`, `entry-business-event`
+- [ ] Enforce "exactly one entry node, and it must have no incoming edges" in `journeyValidation.ts` (extends existing single-start rule rather than replacing it)
+- [ ] Build the **UI layout reference (target)** described above: `AppShell` with a `Journeys`-only left nav rail, `JourneyEditorHeader` replacing the current toolbar, and the accordion `Palette.tsx` (`Events` / `Actions` groups with search) — this is the concrete, screenshot-matched version of "group the palette into categories" and should be treated as the Phase 1 UI deliverable, not a separate effort
+
+### Phase 2 — Orchestration primitives (branching)
+- [ ] Add a **Condition** node type supporting multiple named outgoing branches (e.g. "Yes"/"No" or rule-based splits) — this is the single highest-value gap since `simulateJourney` currently can't express branching at all
+- [ ] Rework `simulateJourney` to walk **all** branches (tree/DAG traversal) instead of "first edge wins," returning a set of possible paths instead of one
+- [ ] Add a **Wait** node type (fixed delay or wait-until-event) — purely modeled/validated client-side (no real scheduler needed for the authoring tool)
+- [ ] Add a **Jump** node type referencing another journey document, per AJO's sub-journey pattern
+- [ ] Update `journeyValidation.ts` reachability + "single coherent path" rule to account for legitimate multi-branch graphs (a valid journey may have several End nodes reachable via different conditions)
+
+### Phase 3 — Channel actions
+- [ ] Generalize the single `email` node into an **Action** node family: Email, Push, SMS, In-app, Web, Code-based experience, Content card, Custom action — each with its own `data` schema (extend `JourneyNodeData` via a discriminated union keyed on channel)
+- [ ] Per-channel Inspector forms (template/subject for Email, message body for SMS/Push, custom payload for Custom action)
+- [ ] Per-channel required-field validation rules in `journeyValidation.ts`
+
+### Phase 4 — Testing modes
+- [ ] Rename/reframe the existing dry-run flow as **Simulation** (synthetic user, structural walk) — closest existing analog
+- [ ] Add a **Test mode** concept: a small set of mock "test profiles" (fetched via TanStack Query from the mock API) that get walked through the graph, surfacing which branch each profile takes
+- [ ] Add a **Dry run** mode that's explicitly labeled as "no real sends" and reuses production-shaped mock data
+- [ ] Make `ExecutionDryRunModal` mode-aware (title/copy changes per mode) rather than one fixed "dry run" label
+
+### Phase 5 — Publish & monitoring (stretch)
+- [ ] Extend `publishBundle.ts` / `lib/adapters/n8n.ts` from a stub into a real compiler once node types stabilize (Phases 1–3)
+- [ ] Add a minimal "journey list" view (TanStack Query `listJourneys`) so publish has somewhere to go besides a JSON download
+- [ ] Stretch: a placeholder reporting view (static/mock metrics) — explicitly lower priority than authoring/testing fidelity
+
+### Non-goals (near-term)
+- Real backend/persistence beyond a mock API layer — this stays a front-end authoring tool
+- Real message delivery (email/SMS/push sending) — out of scope entirely
+- Full AJO reporting/analytics fidelity — a mock placeholder at most
+- Multi-user collaboration/permissions
 
 ---
 
