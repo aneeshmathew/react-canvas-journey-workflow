@@ -5,7 +5,12 @@ import type {
   JourneyNodeData,
   JourneyNodeType,
 } from "@/lib/journeySchema";
-import { ENTRY_NODE_LABELS } from "@/lib/journeySchema";
+import {
+  DEFAULT_CONDITION_BRANCHES,
+  ENTRY_NODE_LABELS,
+  ERROR_FALLBACK_HANDLE,
+  ERROR_FALLBACK_LABEL,
+} from "@/lib/journeySchema";
 
 const ICONS: Partial<Record<JourneyNodeType, string>> = {
   "entry-read-audience": "👥",
@@ -14,6 +19,8 @@ const ICONS: Partial<Record<JourneyNodeType, string>> = {
   "entry-business-event": "📣",
   audience: "👥",
   event: "⚡",
+  condition: "🔀",
+  wait: "⏱",
   email: "✉️",
   end: "🏁",
   start: "🌐",
@@ -25,6 +32,7 @@ function Base({
   subtitle,
   target,
   source,
+  extraHandle,
   ok,
   validationTitle,
 }: {
@@ -33,6 +41,8 @@ function Base({
   subtitle?: string;
   target?: boolean;
   source?: boolean;
+  /** Optional second output (AJO's "alternative path on timeout/error"), rendered off the bottom edge so it reads as distinct from the main flow. */
+  extraHandle?: { id: string; label: string };
   ok: boolean;
   validationTitle: string;
 }) {
@@ -58,6 +68,19 @@ function Base({
       {source ? (
         <Handle type="source" position={Position.Right} id="out" />
       ) : null}
+      {extraHandle ? (
+        <>
+          <Handle
+            type="source"
+            position={Position.Bottom}
+            id={extraHandle.id}
+            style={{ background: "#dc2626" }}
+          />
+          <div className="journey-node__fallback-tag">
+            ⚠ {extraHandle.label}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -71,6 +94,8 @@ type EntryNodeReactType = Node<JourneyNodeData, EntryNodeType>;
 type End = Node<JourneyNodeData, "end">;
 type Audience = Node<JourneyNodeData, "audience">;
 type Ev = Node<JourneyNodeData, "event">;
+type Condition = Node<JourneyNodeData, "condition">;
+type Wait = Node<JourneyNodeData, "wait">;
 type Email = Node<JourneyNodeData, "email">;
 
 /**
@@ -143,6 +168,95 @@ export function EventNode(props: NodeProps<Ev>) {
   );
 }
 
+export function WaitNode(props: NodeProps<Wait>) {
+  const d = props.data;
+  const { ok, messages } = useNodeValidation(props.id);
+  const computed =
+    d.waitAmount && d.waitUnit
+      ? `Wait ${d.waitAmount} ${d.waitUnit}`
+      : "Not configured";
+  return (
+    <Base
+      kind="wait"
+      title={d.label || "Wait"}
+      subtitle={d.subtitle ?? computed}
+      target
+      source
+      ok={ok}
+      validationTitle={validationTooltip(ok, messages)}
+    />
+  );
+}
+
+/**
+ * Condition node: one target handle in, one named source handle per branch
+ * (plus an optional error/timeout fallback handle). Branches are edited in
+ * the Inspector; renaming/removing a branch there also updates any
+ * connected edges (see `useJourneyStore.renameSourceHandle` /
+ * `removeEdgesForSourceHandle`) so connections don't silently orphan.
+ */
+export function ConditionNode(props: NodeProps<Condition>) {
+  const d = props.data;
+  const { ok, messages } = useNodeValidation(props.id);
+  const branches =
+    d.branches && d.branches.length > 0
+      ? d.branches
+      : [...DEFAULT_CONDITION_BRANCHES];
+  const rowCount = branches.length + (d.hasErrorFallback ? 1 : 0);
+
+  return (
+    <div
+      className={`journey-node journey-node--condition ${ok ? "journey-node--ok" : "journey-node--err"}`}
+      title={validationTooltip(ok, messages)}
+    >
+      <Handle type="target" position={Position.Left} id="in" />
+      <div className="journey-node__row">
+        <span className="journey-node__icon" aria-hidden="true">
+          {ICONS.condition}
+        </span>
+        <div className="journey-node__text">
+          <div className="journey-node__title">{d.label || "Condition"}</div>
+          <div className="journey-node__sub">
+            {branches.length} branch{branches.length === 1 ? "" : "es"}
+          </div>
+        </div>
+      </div>
+      <div className="journey-node__chips">
+        {branches.map((b) => (
+          <span key={b} className="journey-node__chip">
+            {b}
+          </span>
+        ))}
+        {d.hasErrorFallback ? (
+          <span className="journey-node__chip journey-node__chip--fallback">
+            ⚠ {ERROR_FALLBACK_LABEL}
+          </span>
+        ) : null}
+      </div>
+      {branches.map((b, i) => (
+        <Handle
+          key={b}
+          type="source"
+          position={Position.Right}
+          id={b}
+          style={{ top: `${((i + 1) / (rowCount + 1)) * 100}%` }}
+        />
+      ))}
+      {d.hasErrorFallback ? (
+        <Handle
+          type="source"
+          position={Position.Right}
+          id={ERROR_FALLBACK_HANDLE}
+          style={{
+            top: `${((branches.length + 1) / (rowCount + 1)) * 100}%`,
+            background: "#dc2626",
+          }}
+        />
+      ) : null}
+    </div>
+  );
+}
+
 export function EmailNode(props: NodeProps<Email>) {
   const d = props.data;
   const { ok, messages } = useNodeValidation(props.id);
@@ -153,6 +267,11 @@ export function EmailNode(props: NodeProps<Email>) {
       subtitle={d.subtitle ?? d.templateName}
       target
       source
+      extraHandle={
+        d.hasErrorFallback
+          ? { id: ERROR_FALLBACK_HANDLE, label: ERROR_FALLBACK_LABEL }
+          : undefined
+      }
       ok={ok}
       validationTitle={validationTooltip(ok, messages)}
     />

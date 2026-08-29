@@ -87,6 +87,10 @@ type JourneyStoreState = {
   connectEdge: (edge: Edge) => void;
   setEdgesDirect: (edges: Edge[]) => void;
   updateNodeData: (id: string, patch: Partial<JourneyNodeData>) => void;
+  /** Keeps edges attached when a Condition branch is renamed in the Inspector. */
+  renameSourceHandle: (nodeId: string, oldHandle: string, newHandle: string) => void;
+  /** Drops edges left dangling when a Condition branch is deleted. */
+  removeEdgesForSourceHandle: (nodeId: string, handle: string) => void;
 
   // --- selection ---
   setSelectedId: (id: string | null) => void;
@@ -187,6 +191,25 @@ export const useJourneyStore = create<JourneyStoreState>((set, get) => ({
     set((state) => ({
       nodes: state.nodes.map((n) =>
         n.id === id ? { ...n, data: { ...n.data, ...patch } } : n,
+      ),
+    }));
+  },
+
+  renameSourceHandle: (nodeId, oldHandle, newHandle) => {
+    if (oldHandle === newHandle) return;
+    set((state) => ({
+      edges: state.edges.map((e) =>
+        e.source === nodeId && e.sourceHandle === oldHandle
+          ? { ...e, sourceHandle: newHandle }
+          : e,
+      ),
+    }));
+  },
+
+  removeEdgesForSourceHandle: (nodeId, handle) => {
+    set((state) => ({
+      edges: state.edges.filter(
+        (e) => !(e.source === nodeId && e.sourceHandle === handle),
       ),
     }));
   },

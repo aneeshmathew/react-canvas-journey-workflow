@@ -1,6 +1,10 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { JourneyNodeData } from "@/lib/journeySchema";
-import { isEntryNodeType } from "@/lib/journeySchema";
+import {
+  DEFAULT_CONDITION_BRANCHES,
+  ERROR_FALLBACK_HANDLE,
+  isEntryNodeType,
+} from "@/lib/journeySchema";
 import { simulateJourney } from "@/lib/simulateJourney";
 
 export type JourneyValidationResult = {
@@ -106,8 +110,63 @@ export function validateJourney(
           add(byNode, n.id, "Template name is required.");
         }
         break;
+      case "wait":
+        if (!n.data.waitAmount || n.data.waitAmount <= 0) {
+          add(byNode, n.id, "Wait duration must be greater than zero.");
+        }
+        if (!n.data.waitUnit) {
+          add(byNode, n.id, "Wait unit is required.");
+        }
+        break;
+      case "condition": {
+        const branches =
+          n.data.branches && n.data.branches.length > 0
+            ? n.data.branches
+            : [...DEFAULT_CONDITION_BRANCHES];
+        if (branches.length < 2) {
+          add(byNode, n.id, "A Condition needs at least two branches.");
+        }
+        const outgoingHandles = new Set(
+          edges.filter((e) => e.source === n.id).map((e) => e.sourceHandle),
+        );
+        for (const b of branches) {
+          if (!outgoingHandles.has(b)) {
+            add(byNode, n.id, `Branch "${b}" has no outgoing connection.`);
+          }
+        }
+        const validHandles = new Set<string | null | undefined>([
+          ...branches,
+          n.data.hasErrorFallback ? ERROR_FALLBACK_HANDLE : undefined,
+        ]);
+        for (const e of edges) {
+          if (e.source === n.id && !validHandles.has(e.sourceHandle)) {
+            add(
+              byNode,
+              n.id,
+              `A connection points from a branch ("${e.sourceHandle}") that no longer exists — reconnect or remove it.`,
+            );
+          }
+        }
+        break;
+      }
       default:
         break;
+    }
+
+    if (
+      (n.type === "condition" || n.type === "email") &&
+      n.data.hasErrorFallback
+    ) {
+      const hasFallbackEdge = edges.some(
+        (e) => e.source === n.id && e.sourceHandle === ERROR_FALLBACK_HANDLE,
+      );
+      if (!hasFallbackEdge) {
+        add(
+          byNode,
+          n.id,
+          "The error/timeout fallback is enabled but not connected to a path.",
+        );
+      }
     }
   }
 

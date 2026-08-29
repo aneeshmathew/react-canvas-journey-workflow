@@ -47,8 +47,14 @@ export type JourneyNodeType =
   | "start"
   | "audience"
   | "event"
+  | "condition"
+  | "wait"
   | "email"
   | "end";
+
+export const DEFAULT_CONDITION_BRANCHES = ["Yes", "No"] as const;
+
+export type WaitUnit = "minutes" | "hours" | "days";
 
 export type JourneyNodeData = {
   label: string;
@@ -56,7 +62,18 @@ export type JourneyNodeData = {
   segmentHint?: string;
   eventKey?: string;
   templateName?: string;
+  /** Condition node: named outgoing branches. Each is rendered as its own source handle. */
+  branches?: string[];
+  /** Condition/Email(Action): AJO's "Add an alternative path in case of a timeout or an error." */
+  hasErrorFallback?: boolean;
+  /** Wait node: fixed-duration wait before continuing. */
+  waitAmount?: number;
+  waitUnit?: WaitUnit;
 } & Record<string, unknown>;
+
+/** Handle id used for the optional timeout/error fallback output on Condition and Email nodes. */
+export const ERROR_FALLBACK_HANDLE = "error-fallback";
+export const ERROR_FALLBACK_LABEL = "Error/Timeout";
 
 export type JourneyDocument = {
   version: typeof JOURNEY_VERSION;

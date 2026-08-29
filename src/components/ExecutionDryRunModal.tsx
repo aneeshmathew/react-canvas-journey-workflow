@@ -1,25 +1,44 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 const STEP_MS = 520;
 
-export type ExecutionStep = { id: string; label: string; type: string };
+export type ExecutionStep = {
+  id: string;
+  label: string;
+  type: string;
+  branchLabel?: string;
+};
+export type ExecutionPath = { steps: ExecutionStep[] };
 
 type Props = {
   open: boolean;
   onClose: () => void;
-  steps: ExecutionStep[];
+  paths: ExecutionPath[];
   warnings: string[];
 };
 
-export function ExecutionDryRunModal({
-  open,
-  onClose,
-  steps,
-  warnings,
-}: Props) {
+/**
+ * Animates one simulated path at a time. Since `simulateJourney` now
+ * enumerates every branch (Phase 2), a journey with a Condition node can
+ * produce several paths — the tab bar lets the person step through each one
+ * rather than only ever seeing the first.
+ */
+export function ExecutionDryRunModal({ open, onClose, paths, warnings }: Props) {
+  const [pathIndex, setPathIndex] = useState(0);
+  const steps = useMemo(
+    () => paths[pathIndex]?.steps ?? [],
+    [paths, pathIndex],
+  );
+
   /** Index of the step currently “running”; `steps.length` means all finished. */
   const [cursor, setCursor] = useState(0);
   const [finished, setFinished] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setPathIndex(0);
+    }
+  }, [open]);
 
   useEffect(() => {
     if (!open || steps.length === 0) {
@@ -52,7 +71,7 @@ export function ExecutionDryRunModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  if (!open || steps.length === 0) return null;
+  if (!open || paths.length === 0) return null;
 
   return (
     <div
@@ -73,6 +92,38 @@ export function ExecutionDryRunModal({
           Preview only — nothing is sent to email, webhooks, or n8n. Use <strong>Publish</strong> to
           download a bundle for n8n; activate the workflow there for real runs.
         </p>
+        {paths.length > 1 ? (
+          <div
+            className="exec-modal-path-tabs"
+            role="tablist"
+            aria-label="Simulated paths"
+          >
+            {paths.map((p, i) => (
+              <button
+                key={i}
+                type="button"
+                role="tab"
+                aria-selected={i === pathIndex}
+                className={
+                  i === pathIndex
+                    ? "exec-modal-path-tab exec-modal-path-tab--active"
+                    : "exec-modal-path-tab"
+                }
+                onClick={() => setPathIndex(i)}
+              >
+                Path {i + 1}
+                {p.steps.some((s) => s.branchLabel) ? (
+                  <span className="exec-modal-path-tab__branches">
+                    {p.steps
+                      .filter((s) => s.branchLabel)
+                      .map((s) => s.branchLabel)
+                      .join(" → ")}
+                  </span>
+                ) : null}
+              </button>
+            ))}
+          </div>
+        ) : null}
         <ol className="exec-modal-steps">
           {steps.map((s, idx) => {
             const done = idx < cursor;
@@ -91,6 +142,11 @@ export function ExecutionDryRunModal({
                 <span className="exec-modal-step__mark" aria-hidden>
                   {done ? "✓" : current ? "▶" : "○"}
                 </span>
+                {s.branchLabel ? (
+                  <span className="exec-modal-step__branch">
+                    [{s.branchLabel}]
+                  </span>
+                ) : null}
                 <span className="exec-modal-step__label">{s.label}</span>
                 <span className="exec-modal-step__type">{s.type}</span>
               </li>

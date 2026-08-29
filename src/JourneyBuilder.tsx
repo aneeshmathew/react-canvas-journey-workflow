@@ -29,14 +29,19 @@ import { JourneyEditorHeader } from "@/components/shell/JourneyEditorHeader";
 import { JourneyPropertiesPanel } from "@/components/shell/JourneyPropertiesPanel";
 import {
   AudienceNode,
+  ConditionNode,
   EmailNode,
   EndNode,
   EntryNode,
   EventNode,
+  WaitNode,
 } from "@/components/nodes/journeyNodes";
 import { Palette } from "@/components/palette/Palette";
 import {
+  DEFAULT_CONDITION_BRANCHES,
   defaultJourney,
+  ERROR_FALLBACK_HANDLE,
+  ERROR_FALLBACK_LABEL,
   isEntryNodeType,
   parseJourney,
   serializeJourney,
@@ -48,7 +53,7 @@ import {
 import { JourneyValidationProvider } from "@/context/JourneyValidationContext";
 import { buildPublishBundle, serializePublishBundle } from "@/lib/publishBundle";
 import { validateJourney, type JourneyValidationResult } from "@/lib/journeyValidation";
-import { simulateJourney } from "@/lib/simulateJourney";
+import { simulateJourney, type SimulationPath } from "@/lib/simulateJourney";
 import { downloadJson, readFileAsText } from "@/lib/storage";
 import { useJourneyStore, type JourneyNode } from "@/store/journeyStore";
 import {
@@ -68,6 +73,8 @@ const nodeTypes = {
   "entry-business-event": EntryNode,
   audience: AudienceNode,
   event: EventNode,
+  condition: ConditionNode,
+  wait: WaitNode,
   email: EmailNode,
   end: EndNode,
 } satisfies NodeTypes;
@@ -86,6 +93,18 @@ function defaultData(type: JourneyNodeType): JourneyNodeData {
         label: "Event",
         subtitle: "When it happens",
         eventKey: "event.name",
+      };
+    case "condition":
+      return {
+        label: "Condition",
+        subtitle: "Branch the journey",
+        branches: [...DEFAULT_CONDITION_BRANCHES],
+      };
+    case "wait":
+      return {
+        label: "Wait",
+        waitAmount: 1,
+        waitUnit: "days",
       };
     case "email":
       return {
@@ -180,6 +199,10 @@ function FlowCanvas() {
   const connectEdgeStore = useJourneyStore((s) => s.connectEdge);
   const setEdgesDirect = useJourneyStore((s) => s.setEdgesDirect);
   const updateNodeDataStore = useJourneyStore((s) => s.updateNodeData);
+  const renameSourceHandle = useJourneyStore((s) => s.renameSourceHandle);
+  const removeEdgesForSourceHandle = useJourneyStore(
+    (s) => s.removeEdgesForSourceHandle,
+  );
   const setSelectedIdStore = useJourneyStore((s) => s.setSelectedId);
   const markNodesSelected = useJourneyStore((s) => s.markNodesSelected);
   const setPaletteWidth = useJourneyStore((s) => s.setPaletteWidth);
@@ -219,12 +242,12 @@ function FlowCanvas() {
   const selected = nodes.find((n) => n.id === selectedId) ?? null;
   const [viewTick, setViewTick] = useState(0);
   const [simulation, setSimulation] = useState<
-    | { kind: "success"; path: string; warnings: string[] }
+    | { kind: "success"; paths: SimulationPath[]; warnings: string[] }
     | { kind: "error"; message: string }
     | null
   >(null);
   const [dryRunModal, setDryRunModal] = useState<{
-    steps: { id: string; label: string; type: string }[];
+    paths: SimulationPath[];
     warnings: string[];
   } | null>(null);
   const [dryRunError, setDryRunError] = useState<string | null>(null);
@@ -242,6 +265,23 @@ function FlowCanvas() {
   const validation = useMemo(
     () => validateJourney(nodes, edges),
     [nodes, edges],
+  );
+
+  // Condition/error-fallback edges carry their branch name as `sourceHandle`
+  // rather than a stored label — derive the display label here so renaming a
+  // branch (or toggling the fallback) is reflected immediately without a
+  // separate "keep edge labels in sync" write path.
+  const displayEdges = useMemo(
+    () =>
+      edges.map((e) => {
+        if (!e.sourceHandle || e.sourceHandle === "out") return e;
+        const label =
+          e.sourceHandle === ERROR_FALLBACK_HANDLE
+            ? ERROR_FALLBACK_LABEL
+            : e.sourceHandle;
+        return { ...e, label };
+      }),
+    [edges],
   );
 
   const needsInspectorLeavePrompt = useCallback(
@@ -438,8 +478,11 @@ function FlowCanvas() {
   const runSimulation = () => {
     const result = simulateJourney(nodes, edges);
     if (result.ok) {
-      const path = result.steps.map((s) => s.label).join(" → ");
-      setSimulation({ kind: "success", path, warnings: result.warnings });
+      setSimulation({
+        kind: "success",
+        paths: result.paths,
+        warnings: result.warnings,
+      });
       setError(null);
     } else {
       setSimulation({ kind: "error", message: result.error });
@@ -451,7 +494,7 @@ function FlowCanvas() {
     const result = simulateJourney(nodes, edges);
     if (result.ok) {
       setDryRunError(null);
-      setDryRunModal({ steps: result.steps, warnings: result.warnings });
+      setDryRunModal({ paths: result.paths, warnings: result.warnings });
     } else {
       setDryRunModal(null);
       setDryRunError(result.error);
@@ -634,7 +677,21 @@ function FlowCanvas() {
       ) : null}
       {simulation?.kind === "success" ? (
         <div className="sim-banner sim-banner--success" role="status">
-          <strong>Simulated path:</strong> {simulation.path}
+          <strong>
+            Simulated {simulation.paths.length} path
+            {simulation.paths.length === 1 ? "" : "s"}:
+          </strong>
+          <ul className="sim-paths">
+            {simulation.paths.map((p, i) => (
+              <li key={i}>
+                {p.steps
+                  .map((s) =>
+                    s.branchLabel ? `[${s.branchLabel}] ${s.label}` : s.label,
+                  )
+                  .join(" → ")}
+              </li>
+            ))}
+          </ul>
           {simulation.warnings.length > 0 ? (
             <ul className="sim-warnings">
               {simulation.warnings.map((w, i) => (
@@ -657,7 +714,7 @@ function FlowCanvas() {
       <ExecutionDryRunModal
         open={dryRunModal !== null}
         onClose={() => setDryRunModal(null)}
-        steps={dryRunModal?.steps ?? []}
+        paths={dryRunModal?.paths ?? []}
         warnings={dryRunModal?.warnings ?? []}
       />
       <InspectorLeavePrompt
@@ -677,7 +734,7 @@ function FlowCanvas() {
         <div className="canvas-wrap">
           <ReactFlow
             nodes={nodes}
-            edges={edges}
+            edges={displayEdges}
             onNodesChange={onNodesChangeStore}
             onEdgesChange={onEdgesChangeStore}
             onConnect={onConnect}
@@ -723,6 +780,8 @@ function FlowCanvas() {
               onClose={requestCloseInspector}
               onSave={handleInspectorSaveAndClose}
               panelWidth={inspectorWidth}
+              onRenameConditionBranch={renameSourceHandle}
+              onRemoveConditionBranchEdges={removeEdgesForSourceHandle}
             />
           </>
         ) : null}

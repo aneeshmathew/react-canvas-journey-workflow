@@ -1,6 +1,6 @@
 import { useMemo, useState, type DragEvent } from "react";
 import type { JourneyNodeType } from "@/lib/journeySchema";
-import { ENTRY_NODE_LABELS, ENTRY_NODE_TYPES } from "@/lib/journeySchema";
+import { ENTRY_NODE_LABELS } from "@/lib/journeySchema";
 
 type PaletteItem = {
   type: JourneyNodeType;
@@ -10,34 +10,37 @@ type PaletteItem = {
 };
 
 /**
- * Per README → "UI layout reference (target)" → palette section: only two
- * accordion groups for now, Events and Actions. Orchestration (Condition /
- * Wait / Jump) stays a Phase 2 roadmap item and deliberately has no empty
- * accordion group here yet — there's nothing to put in it until those node
- * types exist.
- *
- * "End" is structural (like the removed "Start"), not a palette concept in
- * AJO's own model, so it's listed separately below the two accordions
- * rather than folded into either category.
+ * Per README → "UI layout reference (target)" → palette section, corrected
+ * against Adobe's "Design your journey" doc: Read Audience is actually an
+ * **Orchestration** activity in AJO, not an Events one — the doc's own
+ * screenshot shows "ORCHESTRATION (3)", which lines up with exactly three
+ * items once Condition and Wait exist: Read Audience, Condition, Wait.
+ * (An earlier pass here had Read Audience under Events — that was wrong
+ * and is fixed by this grouping.)
  */
 const EVENTS_ITEMS: PaletteItem[] = [
-  ...ENTRY_NODE_TYPES.map((type) => ({
-    type,
-    label: ENTRY_NODE_LABELS[type].label,
-    subtitle: ENTRY_NODE_LABELS[type].subtitle,
-    icon:
-      type === "entry-unitary-event"
-        ? "🌐"
-        : type === "entry-business-event"
-          ? "📣"
-          : type === "entry-audience-qualification"
-            ? "🎯"
-            : "👥",
-  })),
+  {
+    type: "entry-unitary-event",
+    label: ENTRY_NODE_LABELS["entry-unitary-event"].label,
+    subtitle: ENTRY_NODE_LABELS["entry-unitary-event"].subtitle,
+    icon: "🌐",
+  },
+  {
+    type: "entry-business-event",
+    label: ENTRY_NODE_LABELS["entry-business-event"].label,
+    subtitle: ENTRY_NODE_LABELS["entry-business-event"].subtitle,
+    icon: "📣",
+  },
+  {
+    type: "entry-audience-qualification",
+    label: ENTRY_NODE_LABELS["entry-audience-qualification"].label,
+    subtitle: ENTRY_NODE_LABELS["entry-audience-qualification"].subtitle,
+    icon: "🎯",
+  },
   {
     type: "audience",
     label: "Audience",
-    subtitle: "Mid-journey audience check",
+    subtitle: "Mid-journey audience check (legacy — not a real AJO activity)",
     icon: "👥",
   },
   {
@@ -45,6 +48,27 @@ const EVENTS_ITEMS: PaletteItem[] = [
     label: "Event",
     subtitle: "Mid-journey event signal",
     icon: "⚡",
+  },
+];
+
+const ORCHESTRATION_ITEMS: PaletteItem[] = [
+  {
+    type: "entry-read-audience",
+    label: ENTRY_NODE_LABELS["entry-read-audience"].label,
+    subtitle: ENTRY_NODE_LABELS["entry-read-audience"].subtitle,
+    icon: "👥",
+  },
+  {
+    type: "condition",
+    label: "Condition",
+    subtitle: "Branch the journey",
+    icon: "🔀",
+  },
+  {
+    type: "wait",
+    label: "Wait",
+    subtitle: "Pause before continuing",
+    icon: "⏱",
   },
 ];
 
@@ -131,7 +155,7 @@ type Props = {
 export function Palette({ width }: Props) {
   const [query, setQuery] = useState("");
 
-  const { events, actions } = useMemo(() => {
+  const { events, orchestration, actions } = useMemo(() => {
     const q = query.trim().toLowerCase();
     const matches = (item: PaletteItem) =>
       !q ||
@@ -139,6 +163,7 @@ export function Palette({ width }: Props) {
       item.subtitle.toLowerCase().includes(q);
     return {
       events: EVENTS_ITEMS.filter(matches),
+      orchestration: ORCHESTRATION_ITEMS.filter(matches),
       actions: ACTIONS_ITEMS.filter(matches),
     };
   }, [query]);
@@ -162,6 +187,11 @@ export function Palette({ width }: Props) {
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         <AccordionSection title="Events" items={events} defaultOpen />
+        <AccordionSection
+          title="Orchestration"
+          items={orchestration}
+          defaultOpen
+        />
         <AccordionSection title="Actions" items={actions} defaultOpen />
         <div className="pt-2">
           <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
