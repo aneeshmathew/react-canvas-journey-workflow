@@ -13,10 +13,6 @@ import {
   MiniMap,
   ReactFlow,
   ReactFlowProvider,
-  addEdge,
-  reconnectEdge,
-  useEdgesState,
-  useNodesState,
   useReactFlow,
   type Connection,
   type Edge,
@@ -40,7 +36,6 @@ import {
   defaultJourney,
   parseJourney,
   serializeJourney,
-  toJourneyDocument,
   type JourneyDocument,
   type JourneyNodeData,
   type JourneyNodeType,
@@ -49,19 +44,13 @@ import { JourneyValidationProvider } from "@/context/JourneyValidationContext";
 import { buildPublishBundle, serializePublishBundle } from "@/lib/publishBundle";
 import { validateJourney, type JourneyValidationResult } from "@/lib/journeyValidation";
 import { simulateJourney } from "@/lib/simulateJourney";
+import { downloadJson, readFileAsText } from "@/lib/storage";
+import { useJourneyStore, type JourneyNode } from "@/store/journeyStore";
 import {
-  INSPECTOR_PANEL,
-  PALETTE_PANEL,
-  clampWidth,
-  loadPanelWidth,
-  savePanelWidth,
-} from "@/lib/panelWidths";
-import {
-  downloadJson,
-  loadStoredJourneyOrDefault,
-  readFileAsText,
-  saveToLocalStorage,
-} from "@/lib/storage";
+  useJourneyQuery,
+  usePublishJourneyMutation,
+  useSaveJourneyMutation,
+} from "@/hooks/queries/useJourneyQueries";
 
 const nodeTypes = {
   start: StartNode,
@@ -142,58 +131,73 @@ function ValidationStatusBanner({ v }: { v: JourneyValidationResult }) {
   );
 }
 
-function FlowCanvas({
-  initialDoc,
-  journeyName,
-  setJourneyName,
-  error,
-  setError,
-}: {
-  initialDoc: JourneyDocument;
-  journeyName: string;
-  setJourneyName: (s: string) => void;
-  error: string | null;
-  setError: (s: string | null) => void;
-}) {
-  const [nodes, setNodes, onNodesChange] = useNodesState<Node<JourneyNodeData>>(
-    initialDoc.nodes,
-  );
-  const [edges, setEdges, onEdgesChange] = useEdgesState(initialDoc.edges);
+function FlowCanvas() {
+  const journeyQuery = useJourneyQuery();
+  const saveMutation = useSaveJourneyMutation();
+  const publishMutation = usePublishJourneyMutation();
+
   const {
     screenToFlowPosition,
-    setViewport,
+    setViewport: setReactFlowViewport,
     getViewport,
     zoomIn,
     zoomOut,
     fitView,
   } = useReactFlow();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // --- store-backed state (replaces the old useState/useNodesState cluster) ---
+  const hydrated = useJourneyStore((s) => s.hydrated);
+  const nodes = useJourneyStore((s) => s.nodes);
+  const edges = useJourneyStore((s) => s.edges);
+  const journeyName = useJourneyStore((s) => s.journeyName);
+  const selectedId = useJourneyStore((s) => s.selectedId);
+  const paletteWidth = useJourneyStore((s) => s.paletteWidth);
+  const inspectorWidth = useJourneyStore((s) => s.inspectorWidth);
+  const canUndo = useJourneyStore((s) => s.past.length > 0);
+  const canRedo = useJourneyStore((s) => s.future.length > 0);
+
+  const hydrate = useJourneyStore((s) => s.hydrate);
+  const setJourneyName = useJourneyStore((s) => s.setJourneyName);
+  const setStoreViewport = useJourneyStore((s) => s.setViewport);
+  const onNodesChangeStore = useJourneyStore((s) => s.onNodesChange);
+  const onEdgesChangeStore = useJourneyStore((s) => s.onEdgesChange);
+  const addNode = useJourneyStore((s) => s.addNode);
+  const connectEdgeStore = useJourneyStore((s) => s.connectEdge);
+  const setEdgesDirect = useJourneyStore((s) => s.setEdgesDirect);
+  const updateNodeDataStore = useJourneyStore((s) => s.updateNodeData);
+  const setSelectedIdStore = useJourneyStore((s) => s.setSelectedId);
+  const markNodesSelected = useJourneyStore((s) => s.markNodesSelected);
+  const setPaletteWidth = useJourneyStore((s) => s.setPaletteWidth);
+  const setInspectorWidth = useJourneyStore((s) => s.setInspectorWidth);
+  const beginEditSession = useJourneyStore((s) => s.beginEditSession);
+  const commitEditSession = useJourneyStore((s) => s.commitEditSession);
+  const discardEditSession = useJourneyStore((s) => s.discardEditSession);
+  const isEditSessionDirty = useJourneyStore((s) => s.isEditSessionDirty);
+  const undo = useJourneyStore((s) => s.undo);
+  const redo = useJourneyStore((s) => s.redo);
+  const toDocument = useJourneyStore((s) => s.toDocument);
+
+  const [error, setError] = useState<string | null>(null);
   const [inspectorNavPrompt, setInspectorNavPrompt] = useState<{
     nextId: string | null;
     fromNodeId: string;
   } | null>(null);
 
-  const nodesRef = useRef(nodes);
-  const edgesRef = useRef(edges);
-  nodesRef.current = nodes;
-  edgesRef.current = edges;
   const selectedIdRef = useRef<string | null>(null);
-  const inspectorBaselineRef = useRef<string | null>(null);
   const inspectorPromptOpenRef = useRef(false);
-
   useEffect(() => {
     selectedIdRef.current = selectedId;
   }, [selectedId]);
   useEffect(() => {
     inspectorPromptOpenRef.current = inspectorNavPrompt !== null;
   }, [inspectorNavPrompt]);
+
+  // Begin/track an "edit session" baseline whenever selection changes, so
+  // the store can tell (a) whether the leave-prompt should fire and (b)
+  // whether a single history entry should be committed on save/close.
   useLayoutEffect(() => {
-    if (!selectedId) {
-      inspectorBaselineRef.current = null;
-      return;
-    }
-    const n = nodesRef.current.find((x) => x.id === selectedId);
-    if (n) inspectorBaselineRef.current = JSON.stringify(n.data);
+    if (selectedId) beginEditSession();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once per selection change
   }, [selectedId]);
 
   const selected = nodes.find((n) => n.id === selectedId) ?? null;
@@ -209,42 +213,15 @@ function FlowCanvas({
   } | null>(null);
   const [dryRunError, setDryRunError] = useState<string | null>(null);
 
-  const [paletteWidth, setPaletteWidth] = useState(() =>
-    loadPanelWidth(
-      PALETTE_PANEL.storageKey,
-      PALETTE_PANEL.default,
-      PALETTE_PANEL.min,
-      PALETTE_PANEL.max,
-    ),
-  );
-  const [inspectorWidth, setInspectorWidth] = useState(() =>
-    loadPanelWidth(
-      INSPECTOR_PANEL.storageKey,
-      INSPECTOR_PANEL.default,
-      INSPECTOR_PANEL.min,
-      INSPECTOR_PANEL.max,
-    ),
-  );
-
+  // --- hydrate the store once the journey query resolves ---
   useEffect(() => {
-    savePanelWidth(PALETTE_PANEL.storageKey, paletteWidth);
-  }, [paletteWidth]);
-
-  useEffect(() => {
-    savePanelWidth(INSPECTOR_PANEL.storageKey, inspectorWidth);
-  }, [inspectorWidth]);
-
-  const onPaletteResizeDelta = useCallback((deltaX: number) => {
-    setPaletteWidth((w) =>
-      clampWidth(w + deltaX, PALETTE_PANEL.min, PALETTE_PANEL.max),
-    );
-  }, []);
-
-  const onInspectorResizeDelta = useCallback((deltaX: number) => {
-    setInspectorWidth((w) =>
-      clampWidth(w - deltaX, INSPECTOR_PANEL.min, INSPECTOR_PANEL.max),
-    );
-  }, []);
+    if (journeyQuery.data && !hydrated) {
+      hydrate(journeyQuery.data);
+      if (journeyQuery.data.viewport) {
+        void setReactFlowViewport(journeyQuery.data.viewport);
+      }
+    }
+  }, [journeyQuery.data, hydrated, hydrate, setReactFlowViewport]);
 
   const validation = useMemo(
     () => validateJourney(nodes, edges),
@@ -253,15 +230,11 @@ function FlowCanvas({
 
   const needsInspectorLeavePrompt = useCallback(
     (nodeId: string) => {
-      const n = nodesRef.current.find((x) => x.id === nodeId);
-      if (!n) return false;
-      const baseline = inspectorBaselineRef.current;
-      if (!baseline) return false;
-      const dirty = JSON.stringify(n.data) !== baseline;
+      const dirty = isEditSessionDirty();
       const hasVal = (validation.byNode[nodeId]?.length ?? 0) > 0;
       return dirty || hasVal;
     },
-    [validation],
+    [isEditSessionDirty, validation],
   );
 
   useEffect(() => {
@@ -271,58 +244,62 @@ function FlowCanvas({
     ) {
       setError(null);
     }
-  }, [validation.isValid, error, setError]);
+  }, [validation.isValid, error]);
 
+  // --- autosave, now via the save mutation instead of a raw localStorage call ---
   useDebouncedEffect(
     () => {
-      const doc = toJourneyDocument(
-        nodes,
-        edges,
-        {
-          name: journeyName,
-          updatedAt: new Date().toISOString(),
-        },
-        getViewport(),
-      );
-      saveToLocalStorage(doc);
+      if (!hydrated) return;
+      saveMutation.mutate(toDocument());
     },
-    [nodes, edges, journeyName, viewTick],
+    [nodes, edges, journeyName, viewTick, hydrated],
     450,
   );
 
-  useEffect(() => {
-    if (initialDoc.viewport) {
-      void setViewport(initialDoc.viewport);
-    }
-  }, [initialDoc.viewport, setViewport]);
-
   const applyDocument = useCallback(
     (doc: JourneyDocument) => {
-      setJourneyName(doc.meta?.name ?? "Untitled journey");
-      setNodes(doc.nodes);
-      setEdges(doc.edges);
+      hydrate(doc);
       if (doc.viewport) {
-        void setViewport(doc.viewport);
+        void setReactFlowViewport(doc.viewport);
       }
-      setSelectedId(null);
       setError(null);
       setSimulation(null);
       setDryRunModal(null);
       setDryRunError(null);
     },
-    [setEdges, setError, setJourneyName, setNodes, setViewport],
+    [hydrate, setReactFlowViewport],
   );
 
   const onConnect = useCallback(
-    (c: Connection) => setEdges((eds) => addEdge(c, eds)),
-    [setEdges],
+    (c: Connection) => {
+      connectEdgeStore({
+        id: crypto.randomUUID(),
+        source: c.source,
+        target: c.target,
+        sourceHandle: c.sourceHandle,
+        targetHandle: c.targetHandle,
+      });
+    },
+    [connectEdgeStore],
   );
 
   const onReconnect = useCallback(
     (oldEdge: Edge, newConnection: Connection) => {
-      setEdges((eds) => reconnectEdge(oldEdge, newConnection, eds));
+      setEdgesDirect(
+        edges.map((e) =>
+          e.id === oldEdge.id
+            ? {
+                ...e,
+                source: newConnection.source,
+                target: newConnection.target,
+                sourceHandle: newConnection.sourceHandle,
+                targetHandle: newConnection.targetHandle,
+              }
+            : e,
+        ),
+      );
     },
-    [setEdges],
+    [edges, setEdgesDirect],
   );
 
   const onDragOver = useCallback((e: DragEvent<HTMLDivElement>) => {
@@ -338,27 +315,21 @@ function FlowCanvas({
       ) as JourneyNodeType;
       if (!type || !(type in nodeTypes)) return;
       const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
-      setNodes((nds) =>
-        nds.concat({
-          id: crypto.randomUUID(),
-          type,
-          position: pos,
-          data: defaultData(type),
-        }),
-      );
+      addNode({
+        id: crypto.randomUUID(),
+        type,
+        position: pos,
+        data: defaultData(type),
+      } satisfies JourneyNode);
     },
-    [screenToFlowPosition, setNodes],
+    [screenToFlowPosition, addNode],
   );
 
   const onNodeData = useCallback(
     (id: string, patch: Partial<JourneyNodeData>) => {
-      setNodes((nds) =>
-        nds.map((n) =>
-          n.id === id ? { ...n, data: { ...n.data, ...patch } } : n,
-        ),
-      );
+      updateNodeDataStore(id, patch);
     },
-    [setNodes],
+    [updateNodeDataStore],
   );
 
   const requestCloseInspector = useCallback(() => {
@@ -368,78 +339,35 @@ function FlowCanvas({
       setInspectorNavPrompt({ nextId: null, fromNodeId: prevId });
       return;
     }
-    setSelectedId(null);
-    setNodes((nds) => nds.map((n) => ({ ...n, selected: false })));
-  }, [needsInspectorLeavePrompt, setNodes]);
-
-  const saveJourneyToStorage = useCallback(() => {
-    const doc = toJourneyDocument(
-      nodesRef.current,
-      edgesRef.current,
-      {
-        name: journeyName,
-        updatedAt: new Date().toISOString(),
-      },
-      getViewport(),
-    );
-    saveToLocalStorage(doc);
-  }, [journeyName, getViewport]);
-
-  const saveJourneyToStorageAndBaseline = useCallback(() => {
-    saveJourneyToStorage();
-    const sid = selectedIdRef.current;
-    if (sid) {
-      const n = nodesRef.current.find((x) => x.id === sid);
-      if (n) inspectorBaselineRef.current = JSON.stringify(n.data);
-    }
-  }, [saveJourneyToStorage]);
+    setSelectedIdStore(null);
+    markNodesSelected(() => false);
+  }, [needsInspectorLeavePrompt, setSelectedIdStore, markNodesSelected]);
 
   const handleInspectorSaveAndClose = useCallback(() => {
-    saveJourneyToStorageAndBaseline();
-    setSelectedId(null);
-    setNodes((nds) => nds.map((n) => ({ ...n, selected: false })));
-  }, [saveJourneyToStorageAndBaseline, setNodes]);
+    commitEditSession();
+    saveMutation.mutate(toDocument());
+    setSelectedIdStore(null);
+    markNodesSelected(() => false);
+  }, [commitEditSession, saveMutation, toDocument, setSelectedIdStore, markNodesSelected]);
 
   const handleInspectorPromptSave = useCallback(() => {
     if (!inspectorNavPrompt) return;
-    const { fromNodeId, nextId } = inspectorNavPrompt;
-    saveJourneyToStorage();
-    const n = nodesRef.current.find((x) => x.id === fromNodeId);
-    if (n) inspectorBaselineRef.current = JSON.stringify(n.data);
+    const { nextId } = inspectorNavPrompt;
+    commitEditSession();
+    saveMutation.mutate(toDocument());
     setInspectorNavPrompt(null);
-    setSelectedId(nextId);
-    setNodes((nds) =>
-      nds.map((n) => ({
-        ...n,
-        selected: nextId ? n.id === nextId : false,
-      })),
-    );
-  }, [inspectorNavPrompt, saveJourneyToStorage, setNodes]);
+    setSelectedIdStore(nextId);
+    markNodesSelected((id) => (nextId ? id === nextId : false));
+  }, [inspectorNavPrompt, commitEditSession, saveMutation, toDocument, setSelectedIdStore, markNodesSelected]);
 
   const handleInspectorPromptDiscard = useCallback(() => {
     if (!inspectorNavPrompt) return;
-    const { fromNodeId, nextId } = inspectorNavPrompt;
-    const baseline = inspectorBaselineRef.current;
-    setNodes((nds) => {
-      const current = nds.find((x) => x.id === fromNodeId);
-      let mapped = nds;
-      if (current && baseline) {
-        const dirty = JSON.stringify(current.data) !== baseline;
-        if (dirty) {
-          const reverted = JSON.parse(baseline) as JourneyNodeData;
-          mapped = nds.map((x) =>
-            x.id === fromNodeId ? { ...x, data: reverted } : x,
-          );
-        }
-      }
-      return mapped.map((n) => ({
-        ...n,
-        selected: nextId ? n.id === nextId : false,
-      }));
-    });
+    const { nextId } = inspectorNavPrompt;
+    discardEditSession();
     setInspectorNavPrompt(null);
-    setSelectedId(nextId);
-  }, [inspectorNavPrompt, setNodes]);
+    setSelectedIdStore(nextId);
+    markNodesSelected((id) => (nextId ? id === nextId : false));
+  }, [inspectorNavPrompt, discardEditSession, setSelectedIdStore, markNodesSelected]);
 
   const handleInspectorPromptCancel = useCallback(() => {
     setInspectorNavPrompt(null);
@@ -453,14 +381,12 @@ function FlowCanvas({
       if (prevId === nextId) return;
       if (prevId && needsInspectorLeavePrompt(prevId)) {
         setInspectorNavPrompt({ nextId, fromNodeId: prevId });
-        setNodes((nds) =>
-          nds.map((n) => ({ ...n, selected: n.id === prevId })),
-        );
+        markNodesSelected((id) => id === prevId);
         return;
       }
-      setSelectedId(nextId);
+      setSelectedIdStore(nextId);
     },
-    [needsInspectorLeavePrompt, setNodes],
+    [needsInspectorLeavePrompt, setSelectedIdStore, markNodesSelected],
   );
 
   const exportFile = () => {
@@ -469,15 +395,7 @@ function FlowCanvas({
       return;
     }
     setError(null);
-    const doc = toJourneyDocument(
-      nodes,
-      edges,
-      {
-        name: journeyName,
-        updatedAt: new Date().toISOString(),
-      },
-      getViewport(),
-    );
+    const doc = toDocument();
     const safe =
       journeyName.replace(/[^\w\d-]+/g, "-").replace(/^-|-$/g, "") ||
       "journey";
@@ -526,35 +444,42 @@ function FlowCanvas({
 
   const publishBundle = () => {
     if (!validation.isValid) return;
-    const doc = toJourneyDocument(
-      nodes,
-      edges,
-      {
-        name: journeyName,
-        updatedAt: new Date().toISOString(),
-      },
-      getViewport(),
-    );
+    const doc = toDocument();
     const bundle = buildPublishBundle(doc);
-    const safe =
-      journeyName.replace(/[^\w\d-]+/g, "-").replace(/^-|-$/g, "") ||
-      "journey";
-    downloadJson(`${safe}-publish.json`, serializePublishBundle(bundle));
+    publishMutation.mutate(bundle, {
+      onSuccess: () => {
+        const safe =
+          journeyName.replace(/[^\w\d-]+/g, "-").replace(/^-|-$/g, "") ||
+          "journey";
+        downloadJson(`${safe}-publish.json`, serializePublishBundle(bundle));
+      },
+    });
   };
 
   const fromId = inspectorNavPrompt?.fromNodeId;
-  const nodeForPrompt = fromId
-    ? nodes.find((n) => n.id === fromId)
-    : undefined;
-  const baselineStr = inspectorBaselineRef.current;
-  const inspectorPromptDirty = Boolean(
-    nodeForPrompt &&
-      baselineStr &&
-      JSON.stringify(nodeForPrompt.data) !== baselineStr,
-  );
+  const inspectorPromptDirty = Boolean(fromId && isEditSessionDirty());
   const inspectorPromptHasVal = Boolean(
     fromId && (validation.byNode[fromId]?.length ?? 0) > 0,
   );
+
+  if (journeyQuery.isPending) {
+    return (
+      <div className="app-loading" role="status">
+        Loading journey…
+      </div>
+    );
+  }
+
+  if (journeyQuery.isError) {
+    return (
+      <div className="error-banner" role="alert">
+        Failed to load journey.{" "}
+        <button type="button" onClick={() => void journeyQuery.refetch()}>
+          Retry
+        </button>
+      </div>
+    );
+  }
 
   return (
     <JourneyValidationProvider value={validation}>
@@ -608,15 +533,35 @@ function FlowCanvas({
         <button
           type="button"
           onClick={publishBundle}
-          disabled={!validation.isValid}
+          disabled={!validation.isValid || publishMutation.isPending}
           title={
             validation.isValid
-              ? "Download publish bundle (journey + n8n stub) for deployment"
+              ? "Publish (mock) and download bundle (journey + n8n stub)"
               : "Fix validation issues first"
           }
         >
-          Publish
+          {publishMutation.isPending ? "Publishing…" : "Publish"}
         </button>
+        <div className="toolbar-history" role="group" aria-label="Undo / redo">
+          <button
+            type="button"
+            onClick={undo}
+            disabled={!canUndo}
+            title="Undo last structural change"
+            aria-label="Undo"
+          >
+            ↶ Undo
+          </button>
+          <button
+            type="button"
+            onClick={redo}
+            disabled={!canRedo}
+            title="Redo"
+            aria-label="Redo"
+          >
+            ↷ Redo
+          </button>
+        </div>
         <div className="toolbar-zoom" role="group" aria-label="Canvas zoom">
           <button
             type="button"
@@ -643,6 +588,11 @@ function FlowCanvas({
             +
           </button>
         </div>
+        {saveMutation.isPending ? (
+          <span className="save-status" role="status">
+            Saving…
+          </span>
+        ) : null}
       </header>
       <ValidationStatusBanner v={validation} />
       {error ? (
@@ -690,18 +640,21 @@ function FlowCanvas({
         <Palette width={paletteWidth} />
         <PanelResizeHandle
           ariaLabel="Resize palette"
-          onResizeDelta={onPaletteResizeDelta}
+          onResizeDelta={(delta) => setPaletteWidth((w) => w + delta)}
         />
         <div className="canvas-wrap">
           <ReactFlow
             nodes={nodes}
             edges={edges}
-            onNodesChange={onNodesChange}
-            onEdgesChange={onEdgesChange}
+            onNodesChange={onNodesChangeStore}
+            onEdgesChange={onEdgesChangeStore}
             onConnect={onConnect}
             onReconnect={onReconnect}
             edgesReconnectable
-            onMoveEnd={() => setViewTick((t) => t + 1)}
+            onMoveEnd={() => {
+              setViewTick((t) => t + 1);
+              setStoreViewport(getViewport());
+            }}
             onDrop={onDrop}
             onDragOver={onDragOver}
             nodeTypes={nodeTypes}
@@ -727,7 +680,7 @@ function FlowCanvas({
           <>
             <PanelResizeHandle
               ariaLabel="Resize properties panel"
-              onResizeDelta={onInspectorResizeDelta}
+              onResizeDelta={(delta) => setInspectorWidth((w) => w - delta)}
             />
             <Inspector
               selected={selected}
@@ -748,21 +701,10 @@ function FlowCanvas({
 }
 
 export function JourneyBuilder() {
-  const initialDoc = useMemo(() => loadStoredJourneyOrDefault(), []);
-  const [journeyName, setJourneyName] = useState(
-    () => initialDoc.meta?.name ?? "Untitled journey",
-  );
-  const [error, setError] = useState<string | null>(null);
   return (
     <ReactFlowProvider>
       <div className="app-shell">
-        <FlowCanvas
-          initialDoc={initialDoc}
-          journeyName={journeyName}
-          setJourneyName={setJourneyName}
-          error={error}
-          setError={setError}
-        />
+        <FlowCanvas />
       </div>
     </ReactFlowProvider>
   );

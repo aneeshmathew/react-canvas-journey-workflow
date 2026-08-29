@@ -1,3 +1,13 @@
+@import "tailwindcss";
+
+/*
+ * Phase 0 note: Tailwind is now wired in via @tailwindcss/vite, but the
+ * hand-written rules below are kept as-is so the app's visual output is
+ * unchanged during the migration. New components should prefer Tailwind
+ * utility classes; existing rules get ported/retired incrementally
+ * (see README → Roadmap / TODOs → Phase 0).
+ */
+
 :root {
   font-family:
     system-ui,
@@ -97,6 +107,32 @@ body {
   font-weight: 600;
   font-size: 0.9rem;
   line-height: 1;
+}
+
+.toolbar-history {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-left: 0.25rem;
+  padding-left: 0.5rem;
+  border-left: 1px solid #334155;
+}
+
+.save-status {
+  margin-left: auto;
+  font-size: 0.8rem;
+  color: #94a3b8;
+  white-space: nowrap;
+}
+
+.app-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1;
+  height: 100vh;
+  color: #64748b;
+  font-size: 0.95rem;
 }
 
 .app-body {

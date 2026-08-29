@@ -22,17 +22,17 @@ A **journey builder** web app: drag nodes from a palette onto a canvas, connect 
 
 Runtime dependencies are intentionally minimal today: **only** `react`, `react-dom`, and `@xyflow/react`. There is no router, global state library, async data layer, or UI kit.
 
-### Target
+### Target (Phase 0 complete — see Roadmap below)
 
 | Layer | Technology | Why |
 |--------|------------|-----|
 | UI | React 19, TypeScript (strict) | Unchanged — already in place |
 | Graph / canvas | `@xyflow/react` v12 | Unchanged — keep as the canvas engine |
-| **Global / canvas state** | **Zustand** | Replace ad-hoc `useState`/prop-drilling in `JourneyBuilder.tsx` (currently 769 lines) with a proper store: journey doc, selection, panel widths, validation, undo/redo. Matches the Zustand pattern React Flow's own docs recommend for non-trivial flows. |
-| **Server / async state** | **TanStack Query** | Introduce a real data layer: loading audiences/segments, events, message templates, saving/publishing journeys, dry-run + simulation results, journey list, analytics. Replaces bespoke `localStorage` autosave with a proper query/mutation + cache-invalidation model (still backed by a mock API layer to start). |
-| **Styling** | **Tailwind CSS** | Replace `index.css` globals with utility classes + design tokens (spacing, color, radius) so node/panel visuals can approach AJO's canvas look without hand-rolled CSS sprawl. |
+| **Global / canvas state** | **Zustand** ✅ | `src/store/journeyStore.ts` — nodes/edges/journeyName/viewport/selection/panel widths/undo-redo, replacing the old `useState`/`useNodesState`/`useEdgesState` cluster in `JourneyBuilder.tsx` |
+| **Server / async state** | **TanStack Query** ✅ | `src/hooks/queries/useJourneyQueries.ts` over a mock API (`src/lib/api/mockApi.ts`) — journey load/save/publish plus audience/event/template catalogs, still backed by `localStorage` for now |
+| **Styling** | **Tailwind CSS** ✅ (partial) | Wired in via `@tailwindcss/vite`; coexists with `index.css` globals today — full utility-class port is incremental (Phase 1+) |
 | Forms | (TBD — likely React Hook Form + Zod) | Inspector forms will grow substantially (per-channel schemas); needed for validation ergonomics. |
-| Testing | Vitest + React Testing Library | No tests exist today; required before deep refactors are safe. |
+| Testing | Vitest + React Testing Library ✅ | Configured; baseline coverage on `journeyValidation.ts`, `simulateJourney.ts`, `journeyStore.ts` |
 
 ---
 
@@ -242,14 +242,16 @@ Note from the screenshot that canvas nodes render as a small card: icon (colored
 
 Phased so each phase ships something usable. Architecture work (Phase 0) is front-loaded because branching, new node types, and async data all get much harder to retrofit later.
 
-### Phase 0 — Foundations (tech stack migration, no new product features)
-- [ ] Add Tailwind CSS; port `index.css` rules to utility classes / a small `@layer components` set for node chrome (keep visual output ~identical during this step)
-- [ ] Add Zustand; introduce a `useJourneyStore` holding `nodes`, `edges`, `meta`, `selection`, panel widths — migrate `FlowCanvas` state out of `useState` incrementally
-- [ ] Add TanStack Query (`@tanstack/react-query`) + a `QueryClientProvider` at the app root
-- [ ] Build a mock API module (in-memory or MSW) exposing: `listAudiences`, `listEvents`, `listMessageTemplates`, `getJourney`, `saveJourney`, `publishJourney` — this replaces direct `localStorage` calls with query/mutation hooks (`useQuery`/`useMutation`), even before there's a real backend
-- [ ] Move autosave from manual debounce in `lib/storage.ts` to a TanStack Query mutation with `onSuccess` cache updates
-- [ ] Add Vitest + React Testing Library; write baseline tests for `journeyValidation.ts` and `simulateJourney.ts` (pure functions — easiest first coverage) before refactoring around them
-- [ ] Introduce undo/redo at the store level (Zustand + a simple history middleware) — currently absent entirely
+### Phase 0 — Foundations (tech stack migration, no new product features) ✅ implemented
+- [x] Add Tailwind CSS (`@tailwindcss/vite`, `@import "tailwindcss"` in `index.css`) — coexists with the existing hand-written CSS for now, per the "keep visual output ~identical" plan; porting individual rules to utilities is incremental, ongoing work
+- [x] Add Zustand — `src/store/journeyStore.ts` now owns `nodes`, `edges`, `journeyName`, `viewport`, `selectedId`, panel widths, and undo/redo history; `FlowCanvas` (in `JourneyBuilder.tsx`) reads/writes it via selectors instead of local `useState`/`useNodesState`/`useEdgesState`
+- [x] Add TanStack Query + `QueryClientProvider` at the app root (`main.tsx`)
+- [x] Build a mock API module (`src/lib/api/mockApi.ts`) exposing `fetchJourney`, `saveJourney`, `publishJourney`, `fetchAudiences`, `fetchEvents`, `fetchMessageTemplates` — wrapped by query/mutation hooks in `src/hooks/queries/useJourneyQueries.ts`. Journey load/save still persists to `localStorage` under the hood (via the existing `lib/storage.ts` helpers) so behavior is unchanged; swapping in a real backend later only touches this one file.
+- [x] Move autosave from a raw debounced `localStorage` write to a debounced `useSaveJourneyMutation().mutate(...)` call; Publish goes through `usePublishJourneyMutation()`
+- [x] Add Vitest + React Testing Library; baseline tests written for `journeyValidation.ts`, `simulateJourney.ts` (pure functions), and the new `journeyStore.ts` (hydration, undo/redo, edit-session dirty-tracking) — 18 tests, all passing
+- [x] Introduce undo/redo — implemented at the store level, scoped to **structural** edits (add/delete node or edge, connect, reconnect, and a single commit when the Inspector is saved/closed). Field-by-field undo while a panel is open is intentionally out of scope for now (see note in `journeyStore.ts`) — one undo step reverts "the edit session," not every keystroke.
+
+Verified: `npx tsc -b`, `npm run build`, `npm run lint`, and `npm run test` all pass clean as of this phase.
 
 ### Phase 1 — Journey properties + entry points + shell layout
 - [ ] Add a **Journey Properties** panel (name, description, entry type selection) shown before/alongside canvas design, per AJO's "Create" step

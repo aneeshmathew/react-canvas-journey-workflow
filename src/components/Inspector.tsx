@@ -1,6 +1,11 @@
 import { useState } from "react";
 import type { Node } from "@xyflow/react";
 import type { JourneyNodeData, JourneyNodeType } from "@/lib/journeySchema";
+import {
+  useAudiencesQuery,
+  useEventsQuery,
+  useMessageTemplatesQuery,
+} from "@/hooks/queries/useJourneyQueries";
 
 type Props = {
   selected: Node<JourneyNodeData> | null;
@@ -20,6 +25,14 @@ export function Inspector({
   panelWidth,
 }: Props) {
   const [savedFlash, setSavedFlash] = useState(false);
+  // Phase 0: these come from the mock API via TanStack Query — real catalogs
+  // (Adobe Experience Platform audiences, configured events, message
+  // templates) slot in behind the same hooks later without touching this
+  // component. For now they're offered as <datalist> suggestions rather
+  // than hard selects, since the field itself is still a free-text hint.
+  const audiencesQuery = useAudiencesQuery();
+  const eventsQuery = useEventsQuery();
+  const templatesQuery = useMessageTemplatesQuery();
 
   if (!selected) {
     return null;
@@ -78,11 +91,17 @@ export function Inspector({
           <label htmlFor="seg">Segment hint</label>
           <input
             id="seg"
+            list="audience-catalog"
             value={d.segmentHint ?? ""}
             onChange={(e) =>
               onChange(selected.id, { segmentHint: e.target.value || undefined })
             }
           />
+          <datalist id="audience-catalog">
+            {(audiencesQuery.data ?? []).map((a) => (
+              <option key={a.id} value={a.name} />
+            ))}
+          </datalist>
         </>
       ) : null}
       {kind === "event" ? (
@@ -90,11 +109,17 @@ export function Inspector({
           <label htmlFor="ev">Event key</label>
           <input
             id="ev"
+            list="event-catalog"
             value={d.eventKey ?? ""}
             onChange={(e) =>
               onChange(selected.id, { eventKey: e.target.value || undefined })
             }
           />
+          <datalist id="event-catalog">
+            {(eventsQuery.data ?? []).map((ev) => (
+              <option key={ev.id} value={ev.name} />
+            ))}
+          </datalist>
         </>
       ) : null}
       {kind === "email" ? (
@@ -102,11 +127,17 @@ export function Inspector({
           <label htmlFor="tpl">Template name</label>
           <input
             id="tpl"
+            list="template-catalog"
             value={d.templateName ?? ""}
             onChange={(e) =>
               onChange(selected.id, { templateName: e.target.value || undefined })
             }
           />
+          <datalist id="template-catalog">
+            {(templatesQuery.data ?? []).map((t) => (
+              <option key={t.id} value={t.name} />
+            ))}
+          </datalist>
         </>
       ) : null}
       </div>
