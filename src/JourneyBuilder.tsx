@@ -28,6 +28,7 @@ import { PanelResizeHandle } from "@/components/PanelResizeHandle";
 import { AppShell } from "@/components/shell/AppShell";
 import { JourneyEditorHeader } from "@/components/shell/JourneyEditorHeader";
 import { JourneyPropertiesPanel } from "@/components/shell/JourneyPropertiesPanel";
+import { PublishHistoryModal } from "@/components/shell/PublishHistoryModal";
 import {
   ActionNode,
   AudienceNode,
@@ -813,11 +814,16 @@ function FlowCanvas() {
 }
 
 export function JourneyBuilder() {
+  const [journeysModalOpen, setJourneysModalOpen] = useState(false);
   return (
     <ReactFlowProvider>
-      <AppShell>
+      <AppShell onJourneysClick={() => setJourneysModalOpen(true)}>
         <FlowCanvas />
       </AppShell>
+      <PublishHistoryModal
+        open={journeysModalOpen}
+        onClose={() => setJourneysModalOpen(false)}
+      />
     </ReactFlowProvider>
   );
 }

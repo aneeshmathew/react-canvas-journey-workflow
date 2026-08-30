@@ -251,8 +251,8 @@ Updated as of Phase 2. Original gap severity is kept alongside current status so
 | Palette organization | 3 categories (Events / Orchestration / Actions) | Medium | ✅ Resolved (Phase 1 built the accordion, Phase 2 added the 3rd group with corrected categorization). |
 | Validation | Errors block publish; validation is channel/activity-aware | Medium (extend, don't replace) | 🟡 Partial: entry-point, branch-connectivity, and Wait-field rules added (Phase 1/2); still no per-channel validation beyond Email's template-name check. |
 | Testing | 3 modes: Simulation (synthetic users), Test mode (persistent test profiles), Dry run (real prod data, no sends) | **Large** | ✅ Mostly resolved (Phase 4): all 3 modes now exist as distinct flows. 🟡 Test mode's branch resolution is manual (a person clicks the path) rather than AJO's automatic rule-evaluation, since Condition branches here are named, not rule-expressions — see Phase 4's stated scope note. |
-| Publish | Blocked on errors; produces a live, monitored journey | Medium | ❌ Unchanged: `publishBundle.ts` builds a JSON bundle gated on validity, but nothing "goes live" or is monitored. |
-| Reporting | Dedicated analytics/reporting views per journey | **Large** (likely out of scope for near-term phases) | ❌ Unchanged — see Non-goals. |
+| Publish | Blocked on errors; produces a live, monitored journey | Medium | ✅ Mostly resolved (Phase 5): `publishBundle.ts` now compiles a real (best-effort) n8n workflow structurally, with a publish-history view. 🟡 Still nothing "goes live" — there's no execution backend, real or mock, for a published journey to run against. |
+| Reporting | Dedicated analytics/reporting views per journey | **Large** (likely out of scope for near-term phases) | ❌ Unchanged by design — see Non-goals. Publish history (Phase 5) shows structural facts (node/edge counts), not fabricated delivery metrics. |
 | Data model | Journeys reference real Audiences, Events, Data Sources, Custom Actions as first-class configured entities | **Large** | 🟡 Partial: mock catalogs exist and feed Inspector `<datalist>` suggestions (Phase 0), but there's still no real linkage/typed reference, just free-text hints. |
 | State management | N/A (product concern only) | Architectural | ✅ Resolved (Phase 0): Zustand store with undo/redo, replacing the old `useState` cluster. |
 | Async data | N/A (product concern only) | Architectural | ✅ Resolved (Phase 0): TanStack Query + mock API layer. |
@@ -336,16 +336,17 @@ Verified: `npx tsc -b`, `npm run build`, `npm run lint`, and `npm run test` all 
 
 Verified: `npx tsc -b`, `npm run build`, `npm run lint`, and `npm run test` all pass (43 tests) as of this phase.
 
-### Phase 5 — Publish & monitoring (stretch)
-- [ ] Extend `publishBundle.ts` / `lib/adapters/n8n.ts` from a stub into a real compiler once node types stabilize (Phases 1–3)
-- [ ] Add a minimal "journey list" view (TanStack Query `listJourneys`) so publish has somewhere to go besides a JSON download
-- [ ] Stretch: a placeholder reporting view (static/mock metrics) — explicitly lower priority than authoring/testing fidelity
+### Phase 5 — Publish & monitoring (stretch) ✅ mostly implemented
+- [x] Extended `lib/adapters/n8n.ts` from a stub (always emitted empty `nodes: []`/`connections: {}`) into a real structural compiler now that node types have stabilized across Phases 1–3: every journey node maps to an n8n node shape (entry points → `webhook`/`scheduleTrigger`, Condition → `switch` with one output per branch, Wait → `wait`, Actions → `emailSend`/`httpRequest`, End → `noOp`), and connections are built from the actual edge graph, including a second output port for the error/timeout fallback handle. `publishBundle.ts` now carries a `compilerWarnings` array so the exported bundle documents its own limitations (best-effort scaffold, named branches aren't evaluated rules, fallback isn't wired to n8n's real error-output mechanism) instead of silently implying more fidelity than it has. Covered by 6 new tests in `lib/adapters/n8n.test.ts`.
+- [x] Added a **publish history** view (`PublishHistoryModal`), opened from the `AppShell`'s "Journeys" nav item — previously a static, non-interactive label. **Scope correction from what was originally planned:** this is *not* the multi-journey list the roadmap described. This app is still single-journey (see Non-goals below); giving it real multi-journey CRUD would mean threading a journey id through the Zustand store, the query hooks, and `JourneyBuilder` that Phases 0–4 were built around — a materially bigger architectural change than "add a list view," not something to slip in as a Phase 5 afterthought. What's genuinely buildable within the existing single-journey architecture: a history of past publishes of *this* journey (`listPublishHistory`/`publishJourney` in `mockApi.ts`, `usePublishHistoryQuery`), each with a structural summary (node/edge counts, compiler-warning count) rather than fabricated business metrics. It's labeled "publish history," not "journeys," in its own copy so it doesn't imply capabilities that aren't there.
+- [ ] Reporting placeholder — **not built, and not faked.** Inventing mock numbers like "1,234 emails sent" would look like real functionality when none exists behind it. The publish-history view shows real structural facts (node/edge counts) instead of invented delivery metrics. Full reporting stays a Non-goal (see below) until there's an actual reporting backend to reflect.
 
 ### Non-goals (near-term)
 - Real backend/persistence beyond a mock API layer — this stays a front-end authoring tool
 - Real message delivery (email/SMS/push sending) — out of scope entirely
-- Full AJO reporting/analytics fidelity — a mock placeholder at most
+- Full AJO reporting/analytics fidelity — no mock numbers are fabricated; the publish-history view shows structural facts only (see Phase 5)
 - Multi-user collaboration/permissions
+- Real multi-journey CRUD (a single journey is edited at a time; see Phase 5's publish-history scope correction) — the underlying architectural change (journey ids threaded through the store/queries/editor) is real work, not a small add-on, and is intentionally not scheduled
 
 ---
 

@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as api from "@/lib/api/mockApi";
 import type { JourneyDocument } from "@/lib/journeySchema";
+import type { PublishBundle } from "@/lib/publishBundle";
 
 export const journeyKeys = {
   all: ["journey"] as const,
@@ -42,10 +43,14 @@ export function useSaveJourneyMutation() {
   });
 }
 
-/** Publish action — wraps whatever bundle `lib/publishBundle.ts` builds. */
+/** Publish action — wraps whatever bundle `lib/publishBundle.ts` builds, and refreshes the publish-history list on success. */
 export function usePublishJourneyMutation() {
+  const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (bundle: unknown) => api.publishJourney(bundle),
+    mutationFn: (bundle: PublishBundle) => api.publishJourney(bundle),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: publishHistoryKeys.all });
+    },
   });
 }
 
@@ -111,5 +116,22 @@ export function useSaveTestRunMutation() {
         queryKey: testModeKeys.runs(saved.journeyKey, saved.profileId),
       });
     },
+  });
+}
+
+// --- Phase 5: publish history ---------------------------------------------
+//
+// This app is still single-journey (see README → Non-goals), so this is a
+// history of past publishes of *the one journey being edited*, not a
+// multi-journey list — see the scope note on `api.publishJourney`.
+
+export const publishHistoryKeys = {
+  all: ["publish-history"] as const,
+};
+
+export function usePublishHistoryQuery() {
+  return useQuery({
+    queryKey: publishHistoryKeys.all,
+    queryFn: api.listPublishHistory,
   });
 }

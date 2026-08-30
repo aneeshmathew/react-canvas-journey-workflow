@@ -18,6 +18,7 @@ import {
   parseJourney,
   type JourneyDocument,
 } from "@/lib/journeySchema";
+import type { PublishBundle } from "@/lib/publishBundle";
 import { loadFromLocalStorage, saveToLocalStorage } from "@/lib/storage";
 
 /** Simulated network latency so loading states are real and visible in dev. */
@@ -54,13 +55,64 @@ export type PublishResult = {
   bundle: unknown;
 };
 
+const PUBLISH_HISTORY_KEY = "journey-builder:publish-history";
+
+export type PublishRecord = {
+  id: string;
+  journeyName: string;
+  publishedAt: string;
+  nodeCount: number;
+  edgeCount: number;
+  compilerWarningCount: number;
+};
+
+function loadPublishHistory(): PublishRecord[] {
+  try {
+    const raw = localStorage.getItem(PUBLISH_HISTORY_KEY);
+    return raw ? (JSON.parse(raw) as PublishRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePublishHistory(records: PublishRecord[]): void {
+  try {
+    localStorage.setItem(PUBLISH_HISTORY_KEY, JSON.stringify(records));
+  } catch {
+    /* quota or private mode */
+  }
+}
+
 /**
  * Stand-in for a real publish endpoint. Today this just timestamps the
- * bundle that `lib/publishBundle.ts` already builds — a real backend call
- * slots in here without touching the UI layer.
+ * bundle that `lib/publishBundle.ts` already builds, and records a
+ * lightweight structural summary to `localStorage` so the app has
+ * somewhere to show "publish history" (see `listPublishHistory` and
+ * `AppShell`'s Journeys nav) — a real backend call slots in here without
+ * touching the UI layer.
+ *
+ * Scope note: this app remains single-journey (see README → Non-goals), so
+ * "publish history" is a list of past publishes of *the one journey being
+ * edited*, not a multi-journey list. A real journey list is a larger,
+ * deliberately deferred architectural change — see README → Phase 5.
  */
-export async function publishJourney(bundle: unknown): Promise<PublishResult> {
-  return delay({ publishedAt: new Date().toISOString(), bundle }, 300);
+export async function publishJourney(
+  bundle: PublishBundle,
+): Promise<PublishResult> {
+  const record: PublishRecord = {
+    id: crypto.randomUUID(),
+    journeyName: bundle.journey.meta?.name ?? "Untitled journey",
+    publishedAt: new Date().toISOString(),
+    nodeCount: bundle.journey.nodes.length,
+    edgeCount: bundle.journey.edges.length,
+    compilerWarningCount: bundle.compilerWarnings.length,
+  };
+  savePublishHistory([record, ...loadPublishHistory()].slice(0, 50));
+  return delay({ publishedAt: record.publishedAt, bundle }, 300);
+}
+
+export async function listPublishHistory(): Promise<PublishRecord[]> {
+  return delay(loadPublishHistory(), 100);
 }
 
 export type CatalogItem = {
