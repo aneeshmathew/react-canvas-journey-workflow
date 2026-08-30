@@ -1,11 +1,14 @@
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { useNodeValidation } from "@/hooks/useNodeValidation";
 import type {
+  ActionNodeType,
   EntryNodeType,
   JourneyNodeData,
   JourneyNodeType,
 } from "@/lib/journeySchema";
 import {
+  ACTION_DATA_FIELD,
+  ACTION_NODE_LABELS,
   DEFAULT_CONDITION_BRANCHES,
   ENTRY_NODE_LABELS,
   ERROR_FALLBACK_HANDLE,
@@ -21,9 +24,9 @@ const ICONS: Partial<Record<JourneyNodeType, string>> = {
   event: "⚡",
   condition: "🔀",
   wait: "⏱",
-  email: "✉️",
   end: "🏁",
   start: "🌐",
+  email: "✉️",
 };
 
 function Base({
@@ -33,6 +36,7 @@ function Base({
   target,
   source,
   extraHandle,
+  icon,
   ok,
   validationTitle,
 }: {
@@ -43,6 +47,8 @@ function Base({
   source?: boolean;
   /** Optional second output (AJO's "alternative path on timeout/error"), rendered off the bottom edge so it reads as distinct from the main flow. */
   extraHandle?: { id: string; label: string };
+  /** Overrides the static `ICONS` lookup — used by node families (Entry, Action) whose icon varies per sub-kind rather than per top-level `type`. */
+  icon?: string;
   ok: boolean;
   validationTitle: string;
 }) {
@@ -56,7 +62,7 @@ function Base({
       ) : null}
       <div className="journey-node__row">
         <span className="journey-node__icon" aria-hidden="true">
-          {ICONS[kind] ?? "◆"}
+          {icon ?? ICONS[kind] ?? "◆"}
         </span>
         <div className="journey-node__text">
           <div className="journey-node__title">{title}</div>
@@ -91,12 +97,12 @@ function validationTooltip(ok: boolean, messages: string[]): string {
 }
 
 type EntryNodeReactType = Node<JourneyNodeData, EntryNodeType>;
+type ActionNodeReactType = Node<JourneyNodeData, ActionNodeType>;
 type End = Node<JourneyNodeData, "end">;
 type Audience = Node<JourneyNodeData, "audience">;
 type Ev = Node<JourneyNodeData, "event">;
 type Condition = Node<JourneyNodeData, "condition">;
 type Wait = Node<JourneyNodeData, "wait">;
-type Email = Node<JourneyNodeData, "email">;
 
 /**
  * Renders any of the four entry-point activities (see `ENTRY_NODE_TYPES`).
@@ -257,14 +263,30 @@ export function ConditionNode(props: NodeProps<Condition>) {
   );
 }
 
-export function EmailNode(props: NodeProps<Email>) {
+/**
+ * Renders any of the eight Action (channel) node kinds (see
+ * `ACTION_NODE_TYPES`) — Email, Push, SMS, In-app, Web, Code-based
+ * experience, Content card, Custom action. One component covers all eight
+ * since they only differ in icon, default subtitle, and which single data
+ * field (`ACTION_DATA_FIELD`) they collect — see `Inspector.tsx` for the
+ * per-kind field switch. Generalized in Phase 3 from the original
+ * single-purpose `EmailNode`.
+ */
+export function ActionNode(props: NodeProps<ActionNodeReactType>) {
   const d = props.data;
   const { ok, messages } = useNodeValidation(props.id);
+  const kind = props.type;
+  // Defensive fallback for the deprecated "email" literal reaching this
+  // component directly (bypassing `parseJourney`'s migration) — behave like
+  // action-email rather than crashing on an unmapped lookup.
+  const defaults = ACTION_NODE_LABELS[kind] ?? ACTION_NODE_LABELS["action-email"];
+  const field = ACTION_DATA_FIELD[kind] ?? "templateName";
   return (
     <Base
-      kind="email"
-      title={d.label || "Email"}
-      subtitle={d.subtitle ?? d.templateName}
+      kind={kind}
+      icon={defaults.icon}
+      title={d.label || defaults.label}
+      subtitle={d.subtitle ?? (d[field] as string | undefined) ?? defaults.subtitle}
       target
       source
       extraHandle={

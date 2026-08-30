@@ -247,7 +247,7 @@ Updated as of Phase 2. Original gap severity is kept alongside current status so
 | Journey properties | Dedicated config pane (name, description, priority, etc.) before design | **Large** — no properties panel/model | 🟡 Partial (Phase 1): name + description via `JourneyPropertiesPanel`. Priority/frequency-capping-style settings still missing. |
 | Entry points | 4 distinct types (Read Audience, Audience Qualification, Unitary event, Business event), each with its own config UI | **Large** | ✅ Resolved (Phase 1): all 4 modeled as `EntryNodeType`s with per-kind Inspector fields and validation. |
 | Orchestration | Condition (branching), Wait (delay), Journey Fragments (reusable bundles) | **Critical** — biggest structural gap; `simulateJourney` treated >1 outgoing edge as a warning and picked one path | ✅ Mostly resolved (Phase 2): Condition (named branches) + Wait (duration) built; `simulateJourney` rewritten to walk every branch. ❌ Journey Fragments not built — see Phase 2 correction note and Backlog. |
-| Actions / channels | Email, Push, SMS, In-app, Web, Code-based, Content card, Custom action | **Large** | ❌ Still only `email`. Phase 3 (not started). Email did gain the alternative-path-on-error checkbox in Phase 2. |
+| Actions / channels | Email, Push, SMS, In-app, Web, Code-based, Content card, Custom action | **Large** | ✅ Mostly resolved (Phase 3): all 8 channel types modeled with per-kind Inspector forms and validation. 🟡 Simplified: each channel collects one content field rather than AJO's full real per-channel schema (e.g. no rich Push deep-link/title split) — see Phase 3's stated scope simplification. |
 | Palette organization | 3 categories (Events / Orchestration / Actions) | Medium | ✅ Resolved (Phase 1 built the accordion, Phase 2 added the 3rd group with corrected categorization). |
 | Validation | Errors block publish; validation is channel/activity-aware | Medium (extend, don't replace) | 🟡 Partial: entry-point, branch-connectivity, and Wait-field rules added (Phase 1/2); still no per-channel validation beyond Email's template-name check. |
 | Testing | 3 modes: Simulation (synthetic users), Test mode (persistent test profiles), Dry run (real prod data, no sends) | **Large** | 🟡 Partial: simulation is now multi-path (Phase 2) but there's still one undifferentiated mode, not AJO's three. Phase 4 (not started). |
@@ -312,11 +312,18 @@ Known scope gaps carried forward on purpose (not silently dropped):
 - [ ] Node copy/paste on the canvas.
 - [ ] Reaction events (opens/clicks on a sent message, feeding back into the journey) — mentioned in the AJO doc under Events; not modeled yet.
 
-### Phase 3 — Channel actions
-- [ ] Generalize the single `email` node into an **Action** node family: Email, Push, SMS, In-app, Web, Code-based experience, Content card, Custom action — each with its own `data` schema (extend `JourneyNodeData` via a discriminated union keyed on channel)
-- [ ] Per-channel Inspector forms (template/subject for Email, message body for SMS/Push, custom payload for Custom action)
-- [ ] Per-channel required-field validation rules in `journeyValidation.ts`
-- [ ] Carry the alternative-path-on-error checkbox (built in Phase 2 for Email) forward to every new Action type
+### Phase 3 — Channel actions ✅ implemented
+- [x] Generalized the single `email` node into an **Action** node family: `action-email`, `action-push`, `action-sms`, `action-inapp`, `action-web`, `action-code`, `action-content-card`, `action-custom` (`ACTION_NODE_TYPES` in `journeySchema.ts`). Rather than a full discriminated union, each channel maps to exactly **one** of three shared data fields (`ACTION_DATA_FIELD`): `templateName` (Email/In-app/Content card), `messageBody` (SMS/Push), or `customPayload` (Web/Code-based/Custom action) — Email additionally has its own `subject` field. This keeps `JourneyNodeData` from growing one bespoke field per channel while still giving each kind the right required-field rule.
+- [x] One `ActionNode` component (renamed from the old `EmailNode`) renders all eight kinds, driven by `ACTION_NODE_LABELS` for icon/label/subtitle — same pattern as `EntryNode` from Phase 1.
+- [x] Per-channel Inspector forms: template picker w/ catalog datalist (Email/In-app/Content card), message textarea (SMS/Push), config textarea (Web/Code-based/Custom), plus Email's own Subject field.
+- [x] Per-channel required-field validation in `journeyValidation.ts`, keyed off the same `ACTION_DATA_FIELD` map so the Inspector and validator can't drift out of sync with each other.
+- [x] The alternative-path-on-error checkbox (built in Phase 2 for Email only) now shows for all eight Action types.
+- [x] `"email"` kept as a deprecated-but-recognized literal, migrated to `"action-email"` in `parseJourney` — same pattern as `"start"` from Phase 1. Caught and fixed a real gap during this phase: the validator's action-field check and the fallback-connectivity check both need to treat a raw (pre-migration) `"email"` node the same as `"action-email"`, not just the node-rendering and Inspector layers — see `asActionType()` in `journeyValidation.ts`.
+- [x] Added `journeySchema.test.ts` (new — this parsing/migration logic had no dedicated tests before) plus 4 new Phase 3 validation tests.
+
+**Scope simplification, stated plainly:** Email is the only channel with a `subject` field; the other seven only collect one field each (whichever `ACTION_DATA_FIELD` maps to). Real AJO's per-channel config is considerably richer (e.g. Push has title + body + deep link; Code-based experiences have a real code editor). This app models "which single piece of content does this channel need" rather than each channel's full real-world schema — expanding any one channel's fields later is additive (add the field to `JourneyNodeData`, extend that channel's Inspector block) and doesn't require touching the other seven.
+
+Verified: `npx tsc -b`, `npm run build`, `npm run lint`, and `npm run test` all pass (38 tests) as of this phase.
 
 ### Phase 4 — Testing modes
 - [ ] Rename/reframe the existing dry-run flow as **Simulation** (synthetic user, structural walk) — closest existing analog

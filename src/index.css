@@ -460,6 +460,15 @@ body {
   margin: 0.15rem 0 0;
 }
 
+.inspector-channel-hint {
+  margin: -0.2rem 0 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #7c3aed;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
 .inspector-validation {
   margin: 0 0 0.65rem;
   padding: 0.5rem 0.6rem 0.5rem 1.1rem;
@@ -829,9 +838,45 @@ body {
   background: #f5f3ff;
 }
 
-.journey-node--email {
+.journey-node--email,
+.journey-node--action-email {
   border-color: #f97316;
   background: #fff7ed;
+}
+
+.journey-node--action-push {
+  border-color: #db2777;
+  background: #fdf2f8;
+}
+
+.journey-node--action-sms {
+  border-color: #0d9488;
+  background: #f0fdfa;
+}
+
+.journey-node--action-inapp {
+  border-color: #4f46e5;
+  background: #eef2ff;
+}
+
+.journey-node--action-web {
+  border-color: #475569;
+  background: #f1f5f9;
+}
+
+.journey-node--action-code {
+  border-color: #1e293b;
+  background: #f8fafc;
+}
+
+.journey-node--action-content-card {
+  border-color: #7c3aed;
+  background: #f5f3ff;
+}
+
+.journey-node--action-custom {
+  border-color: #57534e;
+  background: #fafaf9;
 }
 
 .journey-node--entry-read-audience,

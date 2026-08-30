@@ -5,7 +5,12 @@ import type {
   JourneyNodeType,
   WaitUnit,
 } from "@/lib/journeySchema";
-import { DEFAULT_CONDITION_BRANCHES } from "@/lib/journeySchema";
+import {
+  ACTION_DATA_FIELD,
+  ACTION_NODE_LABELS,
+  DEFAULT_CONDITION_BRANCHES,
+  isActionNodeType,
+} from "@/lib/journeySchema";
 import {
   useAudiencesQuery,
   useEventsQuery,
@@ -59,6 +64,12 @@ export function Inspector({
     d.branches && d.branches.length > 0
       ? d.branches
       : [...DEFAULT_CONDITION_BRANCHES];
+  // "email" is the deprecated pre-Phase-3 literal; treat it exactly like
+  // action-email in the Inspector too (parseJourney migrates it on load,
+  // but a node dropped before that migration ran in this session should
+  // still get a sensible form).
+  const actionKind = isActionNodeType(kind) ? kind : "action-email";
+  const actionField = ACTION_DATA_FIELD[actionKind];
 
   const handleSave = () => {
     onSave();
@@ -240,25 +251,84 @@ export function Inspector({
           </div>
         </>
       ) : null}
-      {kind === "email" ? (
+      {kind === "email" || isActionNodeType(kind) ? (
         <>
-          <label htmlFor="tpl">Template name</label>
-          <input
-            id="tpl"
-            list="template-catalog"
-            value={d.templateName ?? ""}
-            onChange={(e) =>
-              onChange(selected.id, { templateName: e.target.value || undefined })
-            }
-          />
-          <datalist id="template-catalog">
-            {(templatesQuery.data ?? []).map((t) => (
-              <option key={t.id} value={t.name} />
-            ))}
-          </datalist>
+          {isActionNodeType(kind) ? (
+            <p className="inspector-channel-hint">
+              Channel: {ACTION_NODE_LABELS[kind].label}
+            </p>
+          ) : null}
+          {kind === "action-email" ? (
+            <>
+              <label htmlFor="subject">Subject</label>
+              <input
+                id="subject"
+                value={d.subject ?? ""}
+                onChange={(e) =>
+                  onChange(selected.id, { subject: e.target.value || undefined })
+                }
+              />
+            </>
+          ) : null}
+          {actionField === "templateName" ? (
+            <>
+              <label htmlFor="tpl">Template</label>
+              <input
+                id="tpl"
+                list="template-catalog"
+                value={d.templateName ?? ""}
+                onChange={(e) =>
+                  onChange(selected.id, {
+                    templateName: e.target.value || undefined,
+                  })
+                }
+              />
+              <datalist id="template-catalog">
+                {(templatesQuery.data ?? []).map((t) => (
+                  <option key={t.id} value={t.name} />
+                ))}
+              </datalist>
+            </>
+          ) : null}
+          {actionField === "messageBody" ? (
+            <>
+              <label htmlFor="msg">Message text</label>
+              <textarea
+                id="msg"
+                rows={3}
+                value={d.messageBody ?? ""}
+                onChange={(e) =>
+                  onChange(selected.id, {
+                    messageBody: e.target.value || undefined,
+                  })
+                }
+              />
+            </>
+          ) : null}
+          {actionField === "customPayload" ? (
+            <>
+              <label htmlFor="payload">
+                {kind === "action-web"
+                  ? "Destination / config"
+                  : kind === "action-code"
+                    ? "Code snippet"
+                    : "Custom payload"}
+              </label>
+              <textarea
+                id="payload"
+                rows={4}
+                value={d.customPayload ?? ""}
+                onChange={(e) =>
+                  onChange(selected.id, {
+                    customPayload: e.target.value || undefined,
+                  })
+                }
+              />
+            </>
+          ) : null}
         </>
       ) : null}
-      {kind === "condition" || kind === "email" ? (
+      {kind === "condition" || kind === "email" || isActionNodeType(kind) ? (
         <label className="inspector-checkbox">
           <input
             type="checkbox"

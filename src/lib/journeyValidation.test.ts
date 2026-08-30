@@ -282,4 +282,54 @@ describe("validateJourney", () => {
       expect.arrayContaining([expect.stringContaining("fallback")]),
     );
   });
+
+  it("requires a template on template-based Action nodes (Email, In-app, Content card)", () => {
+    const nodes = [
+      node("entry-1", "entry-unitary-event", { eventKey: "signup" }),
+      node("act-1", "action-inapp", {}),
+      node("end-1", "end", { label: "End" }),
+    ];
+    const edges = [edge("entry-1", "act-1"), edge("act-1", "end-1")];
+    const result = validateJourney(nodes, edges);
+    expect(result.byNode["act-1"]).toEqual(
+      expect.arrayContaining([expect.stringContaining("Template")]),
+    );
+  });
+
+  it("requires message text on SMS/Push Action nodes", () => {
+    const nodes = [
+      node("entry-1", "entry-unitary-event", { eventKey: "signup" }),
+      node("act-1", "action-sms", {}),
+      node("end-1", "end", { label: "End" }),
+    ];
+    const edges = [edge("entry-1", "act-1"), edge("act-1", "end-1")];
+    const result = validateJourney(nodes, edges);
+    expect(result.byNode["act-1"]).toEqual(
+      expect.arrayContaining([expect.stringContaining("Message")]),
+    );
+  });
+
+  it("requires configuration on Web/Code-based/Custom Action nodes", () => {
+    const nodes = [
+      node("entry-1", "entry-unitary-event", { eventKey: "signup" }),
+      node("act-1", "action-code", {}),
+      node("end-1", "end", { label: "End" }),
+    ];
+    const edges = [edge("entry-1", "act-1"), edge("act-1", "end-1")];
+    const result = validateJourney(nodes, edges);
+    expect(result.byNode["act-1"]).toEqual(
+      expect.arrayContaining([expect.stringContaining("Configuration")]),
+    );
+  });
+
+  it("passes a fully-configured Push Action node", () => {
+    const nodes = [
+      node("entry-1", "entry-unitary-event", { eventKey: "signup" }),
+      node("act-1", "action-push", { messageBody: "You have a new offer!" }),
+      node("end-1", "end", { label: "End" }),
+    ];
+    const edges = [edge("entry-1", "act-1"), edge("act-1", "end-1")];
+    const result = validateJourney(nodes, edges);
+    expect(result.byNode["act-1"] ?? []).toHaveLength(0);
+  });
 });

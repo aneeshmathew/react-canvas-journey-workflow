@@ -28,9 +28,9 @@ import { AppShell } from "@/components/shell/AppShell";
 import { JourneyEditorHeader } from "@/components/shell/JourneyEditorHeader";
 import { JourneyPropertiesPanel } from "@/components/shell/JourneyPropertiesPanel";
 import {
+  ActionNode,
   AudienceNode,
   ConditionNode,
-  EmailNode,
   EndNode,
   EntryNode,
   EventNode,
@@ -38,10 +38,12 @@ import {
 } from "@/components/nodes/journeyNodes";
 import { Palette } from "@/components/palette/Palette";
 import {
+  ACTION_NODE_LABELS,
   DEFAULT_CONDITION_BRANCHES,
   defaultJourney,
   ERROR_FALLBACK_HANDLE,
   ERROR_FALLBACK_LABEL,
+  isActionNodeType,
   isEntryNodeType,
   parseJourney,
   serializeJourney,
@@ -64,8 +66,8 @@ import {
 
 const nodeTypes = {
   // Defensive fallback: any hand-crafted or pre-migration document that still
-  // has a literal "start" node renders fine — `parseJourney`/`defaultJourney`
-  // never produce one anymore (see journeySchema.ts).
+  // has a literal "start"/"email" node renders fine — `parseJourney`/
+  // `defaultJourney` never produce either anymore (see journeySchema.ts).
   start: EntryNode,
   "entry-read-audience": EntryNode,
   "entry-audience-qualification": EntryNode,
@@ -75,13 +77,24 @@ const nodeTypes = {
   event: EventNode,
   condition: ConditionNode,
   wait: WaitNode,
-  email: EmailNode,
+  email: ActionNode,
+  "action-email": ActionNode,
+  "action-push": ActionNode,
+  "action-sms": ActionNode,
+  "action-inapp": ActionNode,
+  "action-web": ActionNode,
+  "action-code": ActionNode,
+  "action-content-card": ActionNode,
+  "action-custom": ActionNode,
   end: EndNode,
 } satisfies NodeTypes;
 
 function defaultData(type: JourneyNodeType): JourneyNodeData {
   if (isEntryNodeType(type)) {
     return { ...ENTRY_NODE_LABELS[type] };
+  }
+  if (isActionNodeType(type)) {
+    return { ...ACTION_NODE_LABELS[type] };
   }
   switch (type) {
     case "end":
@@ -105,12 +118,6 @@ function defaultData(type: JourneyNodeType): JourneyNodeData {
         label: "Wait",
         waitAmount: 1,
         waitUnit: "days",
-      };
-    case "email":
-      return {
-        label: "Email",
-        subtitle: "Send message",
-        templateName: "welcome",
       };
     default:
       return { label: "Node" };

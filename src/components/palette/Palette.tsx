@@ -1,6 +1,6 @@
 import { useMemo, useState, type DragEvent } from "react";
 import type { JourneyNodeType } from "@/lib/journeySchema";
-import { ENTRY_NODE_LABELS } from "@/lib/journeySchema";
+import { ACTION_NODE_LABELS, ACTION_NODE_TYPES, ENTRY_NODE_LABELS } from "@/lib/journeySchema";
 
 type PaletteItem = {
   type: JourneyNodeType;
@@ -72,9 +72,12 @@ const ORCHESTRATION_ITEMS: PaletteItem[] = [
   },
 ];
 
-const ACTIONS_ITEMS: PaletteItem[] = [
-  { type: "email", label: "Email", subtitle: "Send an email", icon: "✉️" },
-];
+const ACTIONS_ITEMS: PaletteItem[] = ACTION_NODE_TYPES.map((type) => ({
+  type,
+  label: ACTION_NODE_LABELS[type].label,
+  subtitle: ACTION_NODE_LABELS[type].subtitle,
+  icon: ACTION_NODE_LABELS[type].icon,
+}));
 
 const STRUCTURAL_ITEMS: PaletteItem[] = [
   { type: "end", label: "End", subtitle: "Journey exit", icon: "🏁" },

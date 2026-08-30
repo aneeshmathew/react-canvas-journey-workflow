@@ -1,11 +1,34 @@
 import type { Edge, Node } from "@xyflow/react";
 import type { JourneyNodeData } from "@/lib/journeySchema";
 import {
+  ACTION_DATA_FIELD,
   DEFAULT_CONDITION_BRANCHES,
   ERROR_FALLBACK_HANDLE,
+  isActionNodeType,
   isEntryNodeType,
 } from "@/lib/journeySchema";
 import { simulateJourney } from "@/lib/simulateJourney";
+
+const ACTION_FIELD_MESSAGE: Record<
+  (typeof ACTION_DATA_FIELD)[keyof typeof ACTION_DATA_FIELD],
+  string
+> = {
+  templateName: "Template is required.",
+  messageBody: "Message text is required.",
+  customPayload: "Configuration is required.",
+};
+
+/**
+ * Treats the deprecated `"email"` literal as `"action-email"` for
+ * validation purposes too — `parseJourney` migrates it on load, but a node
+ * that reaches `validateJourney` before that (or via test data / a
+ * hand-crafted document) should still get the right rule rather than
+ * silently skipping validation.
+ */
+function asActionType(type: string | undefined) {
+  if (type === "email") return "action-email" as const;
+  return isActionNodeType(type) ? type : undefined;
+}
 
 export type JourneyValidationResult = {
   /** True when there are no global issues and every node has zero messages. */
@@ -105,11 +128,6 @@ export function validateJourney(
           add(byNode, n.id, "Event is required.");
         }
         break;
-      case "email":
-        if (!String(n.data.templateName ?? "").trim()) {
-          add(byNode, n.id, "Template name is required.");
-        }
-        break;
       case "wait":
         if (!n.data.waitAmount || n.data.waitAmount <= 0) {
           add(byNode, n.id, "Wait duration must be greater than zero.");
@@ -149,12 +167,20 @@ export function validateJourney(
         }
         break;
       }
-      default:
+      default: {
+        const actionKind = asActionType(n.type);
+        if (actionKind) {
+          const field = ACTION_DATA_FIELD[actionKind];
+          if (!String(n.data[field] ?? "").trim()) {
+            add(byNode, n.id, ACTION_FIELD_MESSAGE[field]);
+          }
+        }
         break;
+      }
     }
 
     if (
-      (n.type === "condition" || n.type === "email") &&
+      (n.type === "condition" || asActionType(n.type) !== undefined) &&
       n.data.hasErrorFallback
     ) {
       const hasFallbackEdge = edges.some(
