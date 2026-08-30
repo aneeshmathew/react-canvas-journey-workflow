@@ -469,6 +469,13 @@ body {
   letter-spacing: 0.04em;
 }
 
+.inspector-hint {
+  margin: -0.35rem 0 0.65rem;
+  font-size: 0.68rem;
+  line-height: 1.35;
+  color: #94a3b8;
+}
+
 .inspector-validation {
   margin: 0 0 0.65rem;
   padding: 0.5rem 0.6rem 0.5rem 1.1rem;
@@ -1057,6 +1064,11 @@ body {
 .journey-node--event {
   border-color: #8b5cf6;
   background: #f5f3ff;
+}
+
+.journey-node--event-reaction {
+  border-color: #ec4899;
+  background: #fdf2f8;
 }
 
 .journey-node--email,

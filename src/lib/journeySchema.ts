@@ -132,6 +132,7 @@ export type JourneyNodeType =
   | "start"
   | "audience"
   | "event"
+  | "event-reaction"
   | "condition"
   | "wait"
   | "email"
@@ -140,6 +141,25 @@ export type JourneyNodeType =
 export const DEFAULT_CONDITION_BRANCHES = ["Yes", "No"] as const;
 
 export type WaitUnit = "minutes" | "hours" | "days";
+
+/**
+ * AJO's "Reaction events" — a mid-journey Events entry that reacts to how a
+ * profile engaged with a previously-sent message (opened, clicked, bounced,
+ * unsubscribed), rather than an entirely new inbound signal. See README →
+ * Backlog. This app doesn't have a real link between a Reaction event node
+ * and "which specific Action node it reacts to" — `reactsToHint` is a
+ * free-text label for that (e.g. "Welcome email"), not a structural
+ * reference, since there's no id-based way to pick a prior node here yet.
+ */
+export const REACTION_KINDS = ["opened", "clicked", "bounced", "unsubscribed"] as const;
+export type ReactionKind = (typeof REACTION_KINDS)[number];
+
+export const REACTION_KIND_LABELS: Record<ReactionKind, string> = {
+  opened: "Opened",
+  clicked: "Clicked",
+  bounced: "Bounced",
+  unsubscribed: "Unsubscribed",
+};
 
 export type JourneyNodeData = {
   label: string;
@@ -153,6 +173,10 @@ export type JourneyNodeData = {
   messageBody?: string;
   /** Web/Code-based/Custom action: freeform config, snippet, or destination. */
   customPayload?: string;
+  /** Reaction event node: which engagement signal this reacts to. */
+  reactionKind?: ReactionKind;
+  /** Reaction event node: free-text hint for which prior message this reacts to (no structural link — see note above). */
+  reactsToHint?: string;
   /** Condition node: named outgoing branches. Each is rendered as its own source handle. */
   branches?: string[];
   /** Condition/Action nodes: AJO's "Add an alternative path in case of a timeout or an error." */

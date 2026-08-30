@@ -17,9 +17,11 @@ import {
   defaultJourney,
   parseJourney,
   type JourneyDocument,
+  type JourneyNodeData,
 } from "@/lib/journeySchema";
 import type { PublishBundle } from "@/lib/publishBundle";
 import { loadFromLocalStorage, saveToLocalStorage } from "@/lib/storage";
+import type { Edge, Node } from "@xyflow/react";
 
 /** Simulated network latency so loading states are real and visible in dev. */
 function delay<T>(value: T, ms: number): Promise<T> {
@@ -262,4 +264,66 @@ export async function saveTestRun(
   runs.push(stamped);
   saveAllTestRuns(runs);
   return delay(stamped, 150);
+}
+
+// --- Backlog: Journey Fragments -------------------------------------------
+//
+// A small, reusable library of node/edge bundles a person can drop back
+// onto the canvas — see README → Backlog. Saving/inserting id-remapping and
+// position handling live in `lib/cloneGraph.ts`; this module is just
+// persistence.
+
+export type JourneyFragment = {
+  id: string;
+  name: string;
+  description?: string;
+  nodes: Node<JourneyNodeData>[];
+  edges: Edge[];
+  createdAt: string;
+};
+
+const FRAGMENTS_KEY = "journey-builder:fragments";
+
+function loadFragments(): JourneyFragment[] {
+  try {
+    const raw = localStorage.getItem(FRAGMENTS_KEY);
+    return raw ? (JSON.parse(raw) as JourneyFragment[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveFragmentsList(list: JourneyFragment[]): void {
+  try {
+    localStorage.setItem(FRAGMENTS_KEY, JSON.stringify(list));
+  } catch {
+    /* quota or private mode */
+  }
+}
+
+export async function listFragments(): Promise<JourneyFragment[]> {
+  return delay(
+    loadFragments().sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    120,
+  );
+}
+
+export async function saveFragment(input: {
+  name: string;
+  description?: string;
+  nodes: Node<JourneyNodeData>[];
+  edges: Edge[];
+}): Promise<JourneyFragment> {
+  const stamped: JourneyFragment = {
+    ...input,
+    id: crypto.randomUUID(),
+    createdAt: new Date().toISOString(),
+  };
+  saveFragmentsList([stamped, ...loadFragments()].slice(0, 50));
+  return delay(stamped, 150);
+}
+
+export async function deleteFragment(id: string): Promise<void> {
+  saveFragmentsList(loadFragments().filter((f) => f.id !== id));
+  return delay(undefined, 100);
 }

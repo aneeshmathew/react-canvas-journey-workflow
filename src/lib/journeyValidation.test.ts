@@ -332,4 +332,28 @@ describe("validateJourney", () => {
     const result = validateJourney(nodes, edges);
     expect(result.byNode["act-1"] ?? []).toHaveLength(0);
   });
+
+  it("requires a reaction type on Reaction event nodes", () => {
+    const nodes = [
+      node("entry-1", "entry-unitary-event", { eventKey: "signup" }),
+      node("react-1", "event-reaction", {}),
+      node("end-1", "end", { label: "End" }),
+    ];
+    const edges = [edge("entry-1", "react-1"), edge("react-1", "end-1")];
+    const result = validateJourney(nodes, edges);
+    expect(result.byNode["react-1"]).toEqual(
+      expect.arrayContaining([expect.stringContaining("Reaction type")]),
+    );
+  });
+
+  it("passes a Reaction event node once a reaction type is set", () => {
+    const nodes = [
+      node("entry-1", "entry-unitary-event", { eventKey: "signup" }),
+      node("react-1", "event-reaction", { reactionKind: "opened" }),
+      node("end-1", "end", { label: "End" }),
+    ];
+    const edges = [edge("entry-1", "react-1"), edge("react-1", "end-1")];
+    const result = validateJourney(nodes, edges);
+    expect(result.byNode["react-1"] ?? []).toHaveLength(0);
+  });
 });

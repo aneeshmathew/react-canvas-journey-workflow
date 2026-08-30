@@ -128,6 +128,11 @@ export function validateJourney(
           add(byNode, n.id, "Event is required.");
         }
         break;
+      case "event-reaction":
+        if (!n.data.reactionKind) {
+          add(byNode, n.id, "Reaction type is required.");
+        }
+        break;
       case "wait":
         if (!n.data.waitAmount || n.data.waitAmount <= 0) {
           add(byNode, n.id, "Wait duration must be greater than zero.");

@@ -135,3 +135,41 @@ export function usePublishHistoryQuery() {
     queryFn: api.listPublishHistory,
   });
 }
+
+// --- Backlog: Journey Fragments --------------------------------------------
+
+export const fragmentKeys = {
+  all: ["fragments"] as const,
+};
+
+export function useFragmentsQuery() {
+  return useQuery({
+    queryKey: fragmentKeys.all,
+    queryFn: api.listFragments,
+  });
+}
+
+export function useSaveFragmentMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      name: string;
+      description?: string;
+      nodes: Parameters<typeof api.saveFragment>[0]["nodes"];
+      edges: Parameters<typeof api.saveFragment>[0]["edges"];
+    }) => api.saveFragment(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: fragmentKeys.all });
+    },
+  });
+}
+
+export function useDeleteFragmentMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteFragment(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: fragmentKeys.all });
+    },
+  });
+}

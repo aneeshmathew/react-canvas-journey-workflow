@@ -28,6 +28,7 @@ import {
 } from "@xyflow/react";
 import type { JourneyDocument, JourneyNodeData } from "@/lib/journeySchema";
 import { JOURNEY_VERSION } from "@/lib/journeySchema";
+import { cloneNodesAndEdges } from "@/lib/cloneGraph";
 import {
   INSPECTOR_PANEL,
   PALETTE_PANEL,
@@ -42,6 +43,8 @@ type GraphSnapshot = {
   nodes: JourneyNode[];
   edges: Edge[];
 };
+
+type ClipboardSnapshot = GraphSnapshot & { pasteCount: number };
 
 const MAX_HISTORY = 50;
 
@@ -71,6 +74,8 @@ type JourneyStoreState = {
   future: GraphSnapshot[];
   /** Snapshot taken when the Inspector opened, used to detect a dirty edit session to commit to history on save/close. */
   editSessionBaseline: GraphSnapshot | null;
+  /** Clipboard for canvas copy/paste — entry-point nodes are excluded (see `cloneNodesAndEdges`). */
+  clipboard: ClipboardSnapshot | null;
 
   // --- hydration ---
   hydrate: (doc: JourneyDocument) => void;
@@ -91,6 +96,16 @@ type JourneyStoreState = {
   renameSourceHandle: (nodeId: string, oldHandle: string, newHandle: string) => void;
   /** Drops edges left dangling when a Condition branch is deleted. */
   removeEdgesForSourceHandle: (nodeId: string, handle: string) => void;
+  /** Copies every currently-selected node (+ fully-contained edges) to the in-memory clipboard. Returns how many entry-point nodes were excluded, if any. */
+  copySelection: () => { copiedCount: number; skippedEntryCount: number };
+  /** Pastes the clipboard with fresh ids, offset from its original position, and selects the result. No-op if the clipboard is empty. */
+  pasteClipboard: () => void;
+  /** Inserts an arbitrary node/edge subgraph (e.g. a Journey Fragment) with fresh ids at the given offset. */
+  insertSubgraph: (
+    nodes: JourneyNode[],
+    edges: Edge[],
+    offset: { x: number; y: number },
+  ) => void;
 
   // --- selection ---
   setSelectedId: (id: string | null) => void;
@@ -140,6 +155,7 @@ export const useJourneyStore = create<JourneyStoreState>((set, get) => ({
   past: [],
   future: [],
   editSessionBaseline: null,
+  clipboard: null,
 
   hydrate: (doc) => {
     set({
@@ -212,6 +228,72 @@ export const useJourneyStore = create<JourneyStoreState>((set, get) => ({
         (e) => !(e.source === nodeId && e.sourceHandle === handle),
       ),
     }));
+  },
+
+  copySelection: () => {
+    const { nodes, edges } = get();
+    const selected = nodes.filter((n) => n.selected);
+    // Cloning with a zero offset here just to reuse the entry-filtering /
+    // edge-containment logic — positions get re-offset for real on paste.
+    const cloned = cloneNodesAndEdges(selected, edges, { x: 0, y: 0 }, () =>
+      crypto.randomUUID(),
+    );
+    if (cloned.nodes.length === 0) {
+      set({ clipboard: null });
+      return { copiedCount: 0, skippedEntryCount: cloned.skippedEntryCount };
+    }
+    set({ clipboard: { nodes: cloned.nodes, edges: cloned.edges, pasteCount: 0 } });
+    return {
+      copiedCount: cloned.nodes.length,
+      skippedEntryCount: cloned.skippedEntryCount,
+    };
+  },
+
+  pasteClipboard: () => {
+    const { clipboard } = get();
+    if (!clipboard || clipboard.nodes.length === 0) return;
+    get().commitHistory();
+    const pasteCount = clipboard.pasteCount + 1;
+    // The clipboard already has fresh ids from copySelection; pasting again
+    // needs *another* fresh set so repeated pastes don't collide, and the
+    // offset grows with each paste so they don't stack exactly on top of
+    // each other.
+    const cloned = cloneNodesAndEdges(
+      clipboard.nodes,
+      clipboard.edges,
+      { x: 48 * pasteCount, y: 48 * pasteCount },
+      () => crypto.randomUUID(),
+    );
+    set((state) => {
+      const deselected: JourneyNode[] = state.nodes.map((n) => ({
+        ...n,
+        selected: false,
+      }));
+      return {
+        nodes: deselected.concat(cloned.nodes),
+        edges: state.edges.concat(cloned.edges),
+        selectedId: null,
+        clipboard: { ...clipboard, pasteCount },
+      };
+    });
+  },
+
+  insertSubgraph: (nodes, edges, offset) => {
+    get().commitHistory();
+    const cloned = cloneNodesAndEdges(nodes, edges, offset, () =>
+      crypto.randomUUID(),
+    );
+    set((state) => {
+      const deselected: JourneyNode[] = state.nodes.map((n) => ({
+        ...n,
+        selected: false,
+      }));
+      return {
+        nodes: deselected.concat(cloned.nodes),
+        edges: state.edges.concat(cloned.edges),
+        selectedId: null,
+      };
+    });
   },
 
   setSelectedId: (id) => set({ selectedId: id }),

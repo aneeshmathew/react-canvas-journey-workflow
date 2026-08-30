@@ -1,6 +1,13 @@
 import { useMemo, useState, type DragEvent } from "react";
 import type { JourneyNodeType } from "@/lib/journeySchema";
 import { ACTION_NODE_LABELS, ACTION_NODE_TYPES, ENTRY_NODE_LABELS } from "@/lib/journeySchema";
+import {
+  useDeleteFragmentMutation,
+  useFragmentsQuery,
+} from "@/hooks/queries/useJourneyQueries";
+
+/** dataTransfer key used to distinguish "drop a Journey Fragment" from "drop a single node type" in `JourneyBuilder.onDrop`. */
+export const FRAGMENT_DRAG_MIME = "application/journey-fragment";
 
 type PaletteItem = {
   type: JourneyNodeType;
@@ -48,6 +55,12 @@ const EVENTS_ITEMS: PaletteItem[] = [
     label: "Event",
     subtitle: "Mid-journey event signal",
     icon: "⚡",
+  },
+  {
+    type: "event-reaction",
+    label: "Reaction event",
+    subtitle: "Opened / clicked / bounced / unsubscribed",
+    icon: "👆",
   },
 ];
 
@@ -151,6 +164,92 @@ function AccordionSection({
   );
 }
 
+/**
+ * Journey Fragments (see README → Backlog): a small, reusable library of
+ * node/edge bundles saved from a canvas selection. Dragging one onto the
+ * canvas inserts a full copy (fresh ids, dropped near the cursor) rather
+ * than a single node — handled in `JourneyBuilder.onDrop` by checking for
+ * `FRAGMENT_DRAG_MIME` before falling back to the single-node-type path.
+ */
+function FragmentsAccordionSection({ query }: { query: string }) {
+  const [open, setOpen] = useState(true);
+  const fragmentsQuery = useFragmentsQuery();
+  const deleteFragment = useDeleteFragmentMutation();
+
+  const q = query.trim().toLowerCase();
+  const fragments = (fragmentsQuery.data ?? []).filter(
+    (f) =>
+      !q ||
+      f.name.toLowerCase().includes(q) ||
+      (f.description ?? "").toLowerCase().includes(q),
+  );
+
+  return (
+    <div className="border-b border-slate-200 py-1.5">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between px-1 py-1 text-left text-[11px] font-semibold uppercase tracking-wide text-slate-500 hover:text-slate-700"
+      >
+        <span>Fragments ({fragments.length})</span>
+        <span aria-hidden="true" className="text-slate-400">
+          {open ? "▾" : "▸"}
+        </span>
+      </button>
+      {open ? (
+        <div className="mt-1.5 flex flex-col gap-1.5 px-0.5">
+          {fragmentsQuery.isPending ? (
+            <p className="px-1 py-1 text-[11px] text-slate-400">Loading…</p>
+          ) : null}
+          {!fragmentsQuery.isPending && fragments.length === 0 ? (
+            <p className="px-1 py-1 text-[11px] text-slate-400">
+              None yet — select nodes on the canvas and use "Save as
+              Fragment" in the toolbar.
+            </p>
+          ) : null}
+          {fragments.map((f) => (
+            <div
+              key={f.id}
+              className="flex items-start gap-2 rounded-md border border-slate-200 bg-white px-2.5 py-2 text-xs shadow-sm hover:border-slate-300"
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData(FRAGMENT_DRAG_MIME, f.id);
+                e.dataTransfer.effectAllowed = "move";
+              }}
+            >
+              <span
+                aria-hidden="true"
+                className="mt-0.5 cursor-grab text-sm leading-none active:cursor-grabbing"
+              >
+                🧩
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium text-slate-800">
+                  {f.name}
+                </span>
+                <span className="block truncate text-[11px] text-slate-500">
+                  {f.nodes.length} node{f.nodes.length === 1 ? "" : "s"}
+                  {f.description ? ` · ${f.description}` : ""}
+                </span>
+              </span>
+              <button
+                type="button"
+                aria-label={`Delete fragment ${f.name}`}
+                title="Delete fragment"
+                className="flex-shrink-0 text-slate-300 hover:text-red-500"
+                onClick={() => deleteFragment.mutate(f.id)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 type Props = {
   width: number;
 };
@@ -196,6 +295,7 @@ export function Palette({ width }: Props) {
           defaultOpen
         />
         <AccordionSection title="Actions" items={actions} defaultOpen />
+        <FragmentsAccordionSection query={query} />
         <div className="pt-2">
           <p className="mb-1.5 px-1 text-[11px] font-semibold uppercase tracking-wide text-slate-400">
             Canvas

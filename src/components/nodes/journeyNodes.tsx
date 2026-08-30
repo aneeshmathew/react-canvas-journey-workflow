@@ -13,6 +13,7 @@ import {
   ENTRY_NODE_LABELS,
   ERROR_FALLBACK_HANDLE,
   ERROR_FALLBACK_LABEL,
+  REACTION_KIND_LABELS,
 } from "@/lib/journeySchema";
 
 const ICONS: Partial<Record<JourneyNodeType, string>> = {
@@ -22,6 +23,7 @@ const ICONS: Partial<Record<JourneyNodeType, string>> = {
   "entry-business-event": "📣",
   audience: "👥",
   event: "⚡",
+  "event-reaction": "👆",
   condition: "🔀",
   wait: "⏱",
   end: "🏁",
@@ -101,6 +103,7 @@ type ActionNodeReactType = Node<JourneyNodeData, ActionNodeType>;
 type End = Node<JourneyNodeData, "end">;
 type Audience = Node<JourneyNodeData, "audience">;
 type Ev = Node<JourneyNodeData, "event">;
+type ReactionEvent = Node<JourneyNodeData, "event-reaction">;
 type Condition = Node<JourneyNodeData, "condition">;
 type Wait = Node<JourneyNodeData, "wait">;
 
@@ -166,6 +169,30 @@ export function EventNode(props: NodeProps<Ev>) {
       kind="event"
       title={d.label || "Event"}
       subtitle={d.subtitle ?? d.eventKey}
+      target
+      source
+      ok={ok}
+      validationTitle={validationTooltip(ok, messages)}
+    />
+  );
+}
+
+export function EventReactionNode(props: NodeProps<ReactionEvent>) {
+  const d = props.data;
+  const { ok, messages } = useNodeValidation(props.id);
+  const kindLabel = d.reactionKind ? REACTION_KIND_LABELS[d.reactionKind] : undefined;
+  return (
+    <Base
+      kind="event-reaction"
+      title={d.label || "Reaction event"}
+      subtitle={
+        d.subtitle ??
+        (kindLabel
+          ? d.reactsToHint
+            ? `${kindLabel} · ${d.reactsToHint}`
+            : kindLabel
+          : "Not configured")
+      }
       target
       source
       ok={ok}

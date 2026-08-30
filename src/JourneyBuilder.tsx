@@ -36,9 +36,11 @@ import {
   EndNode,
   EntryNode,
   EventNode,
+  EventReactionNode,
   WaitNode,
 } from "@/components/nodes/journeyNodes";
-import { Palette } from "@/components/palette/Palette";
+import { Palette, FRAGMENT_DRAG_MIME } from "@/components/palette/Palette";
+import { cloneNodesAndEdges, normalizePositions } from "@/lib/cloneGraph";
 import {
   ACTION_NODE_LABELS,
   DEFAULT_CONDITION_BRANCHES,
@@ -64,6 +66,8 @@ import {
   useJourneyQuery,
   usePublishJourneyMutation,
   useSaveJourneyMutation,
+  useFragmentsQuery,
+  useSaveFragmentMutation,
 } from "@/hooks/queries/useJourneyQueries";
 
 const nodeTypes = {
@@ -77,6 +81,7 @@ const nodeTypes = {
   "entry-business-event": EntryNode,
   audience: AudienceNode,
   event: EventNode,
+  "event-reaction": EventReactionNode,
   condition: ConditionNode,
   wait: WaitNode,
   email: ActionNode,
@@ -108,6 +113,11 @@ function defaultData(type: JourneyNodeType): JourneyNodeData {
         label: "Event",
         subtitle: "When it happens",
         eventKey: "event.name",
+      };
+    case "event-reaction":
+      return {
+        label: "Reaction event",
+        subtitle: "Opened / clicked / bounced / unsubscribed",
       };
     case "condition":
       return {
@@ -176,6 +186,8 @@ function FlowCanvas() {
   const journeyQuery = useJourneyQuery();
   const saveMutation = useSaveJourneyMutation();
   const publishMutation = usePublishJourneyMutation();
+  const fragmentsQuery = useFragmentsQuery();
+  const saveFragmentMutation = useSaveFragmentMutation();
 
   const {
     screenToFlowPosition,
@@ -197,6 +209,9 @@ function FlowCanvas() {
   const inspectorWidth = useJourneyStore((s) => s.inspectorWidth);
   const canUndo = useJourneyStore((s) => s.past.length > 0);
   const canRedo = useJourneyStore((s) => s.future.length > 0);
+  const canPaste = useJourneyStore(
+    (s) => (s.clipboard?.nodes.length ?? 0) > 0,
+  );
 
   const hydrate = useJourneyStore((s) => s.hydrate);
   const setJourneyName = useJourneyStore((s) => s.setJourneyName);
@@ -222,15 +237,65 @@ function FlowCanvas() {
   const isEditSessionDirty = useJourneyStore((s) => s.isEditSessionDirty);
   const undo = useJourneyStore((s) => s.undo);
   const redo = useJourneyStore((s) => s.redo);
+  const copySelection = useJourneyStore((s) => s.copySelection);
+  const pasteClipboard = useJourneyStore((s) => s.pasteClipboard);
+  const insertSubgraph = useJourneyStore((s) => s.insertSubgraph);
   const toDocument = useJourneyStore((s) => s.toDocument);
 
   const [error, setError] = useState<string | null>(null);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [testModeOpen, setTestModeOpen] = useState(false);
+  const [copyNote, setCopyNote] = useState<string | null>(null);
   const [inspectorNavPrompt, setInspectorNavPrompt] = useState<{
     nextId: string | null;
     fromNodeId: string;
   } | null>(null);
+
+  const handleCopy = useCallback(() => {
+    const { copiedCount, skippedEntryCount } = copySelection();
+    if (copiedCount === 0 && skippedEntryCount === 0) {
+      setCopyNote("Select a node first — nothing was copied.");
+    } else if (skippedEntryCount > 0) {
+      setCopyNote(
+        `Copied ${copiedCount} node(s). Entry points can't be duplicated, so ${skippedEntryCount} was skipped.`,
+      );
+    } else {
+      setCopyNote(`Copied ${copiedCount} node(s).`);
+    }
+  }, [copySelection]);
+
+  const handlePaste = useCallback(() => {
+    pasteClipboard();
+  }, [pasteClipboard]);
+
+  // Ctrl/Cmd+C / Ctrl/Cmd+V for canvas copy/paste (see also the Copy/Paste
+  // toolbar buttons for discoverability). Skipped while focus is in a text
+  // field so it doesn't hijack normal text copy/paste in the Inspector, the
+  // journey-name field, etc.
+  useEffect(() => {
+    const isTextInput = (el: EventTarget | null) => {
+      if (!(el instanceof HTMLElement)) return false;
+      const tag = el.tagName;
+      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || el.isContentEditable;
+    };
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (!(e.metaKey || e.ctrlKey)) return;
+      if (isTextInput(e.target)) return;
+      if (e.key === "c" || e.key === "C") {
+        handleCopy();
+      } else if (e.key === "v" || e.key === "V") {
+        handlePaste();
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [handleCopy, handlePaste]);
+
+  useEffect(() => {
+    if (!copyNote) return;
+    const t = window.setTimeout(() => setCopyNote(null), 3000);
+    return () => window.clearTimeout(t);
+  }, [copyNote]);
 
   const selectedIdRef = useRef<string | null>(null);
   const inspectorPromptOpenRef = useRef(false);
@@ -376,6 +441,14 @@ function FlowCanvas() {
   const onDrop = useCallback(
     (e: DragEvent<HTMLDivElement>) => {
       e.preventDefault();
+      const fragmentId = e.dataTransfer.getData(FRAGMENT_DRAG_MIME);
+      if (fragmentId) {
+        const fragment = fragmentsQuery.data?.find((f) => f.id === fragmentId);
+        if (!fragment) return;
+        const pos = screenToFlowPosition({ x: e.clientX, y: e.clientY });
+        insertSubgraph(fragment.nodes, fragment.edges, pos);
+        return;
+      }
       const type = e.dataTransfer.getData(
         "application/reactflow",
       ) as JourneyNodeType;
@@ -388,8 +461,35 @@ function FlowCanvas() {
         data: defaultData(type),
       } satisfies JourneyNode);
     },
-    [screenToFlowPosition, addNode],
+    [screenToFlowPosition, addNode, fragmentsQuery.data, insertSubgraph],
   );
+
+  const handleSaveFragment = useCallback(() => {
+    const selected = nodes.filter((n) => n.selected);
+    const extracted = cloneNodesAndEdges(selected, edges, { x: 0, y: 0 }, () =>
+      crypto.randomUUID(),
+    );
+    if (extracted.nodes.length === 0) {
+      setCopyNote(
+        extracted.skippedEntryCount > 0
+          ? "Entry points can't be saved as a fragment — select a different node."
+          : "Select at least one node first — nothing was saved.",
+      );
+      return;
+    }
+    const name = window.prompt("Name this fragment:", "");
+    if (!name) return;
+    const normalized = normalizePositions(extracted.nodes);
+    saveFragmentMutation.mutate(
+      { name, nodes: normalized, edges: extracted.edges },
+      {
+        onSuccess: () =>
+          setCopyNote(
+            `Saved fragment "${name}" (${normalized.length} node(s)).`,
+          ),
+      },
+    );
+  }, [nodes, edges, saveFragmentMutation]);
 
   const onNodeData = useCallback(
     (id: string, patch: Partial<JourneyNodeData>) => {
@@ -663,6 +763,33 @@ function FlowCanvas() {
             ↷ Redo
           </button>
         </div>
+        <div className="toolbar-history" role="group" aria-label="Copy / paste">
+          <button
+            type="button"
+            onClick={handleCopy}
+            title="Copy selected node(s) (Ctrl/Cmd+C)"
+            aria-label="Copy"
+          >
+            ⧉ Copy
+          </button>
+          <button
+            type="button"
+            onClick={handlePaste}
+            disabled={!canPaste}
+            title="Paste copied node(s) (Ctrl/Cmd+V)"
+            aria-label="Paste"
+          >
+            📋 Paste
+          </button>
+          <button
+            type="button"
+            onClick={handleSaveFragment}
+            title="Save the selected node(s) as a reusable Journey Fragment"
+            aria-label="Save as Fragment"
+          >
+            🧩 Save as Fragment
+          </button>
+        </div>
         <div className="toolbar-zoom" role="group" aria-label="Canvas zoom">
           <button
             type="button"
@@ -691,6 +818,11 @@ function FlowCanvas() {
         </div>
       </div>
       <ValidationStatusBanner v={validation} />
+      {copyNote ? (
+        <div className="sim-banner sim-banner--success" role="status">
+          {copyNote}
+        </div>
+      ) : null}
       {error ? (
         <div className="error-banner" role="alert">
           {error}

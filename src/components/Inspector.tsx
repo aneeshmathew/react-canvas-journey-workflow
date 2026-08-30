@@ -3,6 +3,7 @@ import type { Node } from "@xyflow/react";
 import type {
   JourneyNodeData,
   JourneyNodeType,
+  ReactionKind,
   WaitUnit,
 } from "@/lib/journeySchema";
 import {
@@ -10,6 +11,8 @@ import {
   ACTION_NODE_LABELS,
   DEFAULT_CONDITION_BRANCHES,
   isActionNodeType,
+  REACTION_KIND_LABELS,
+  REACTION_KINDS,
 } from "@/lib/journeySchema";
 import {
   useAudiencesQuery,
@@ -177,6 +180,44 @@ export function Inspector({
               <option key={ev.id} value={ev.name} />
             ))}
           </datalist>
+        </>
+      ) : null}
+      {kind === "event-reaction" ? (
+        <>
+          <label htmlFor="reaction-kind">Reacts to</label>
+          <select
+            id="reaction-kind"
+            value={d.reactionKind ?? ""}
+            onChange={(e) =>
+              onChange(selected.id, {
+                reactionKind: (e.target.value || undefined) as
+                  | ReactionKind
+                  | undefined,
+              })
+            }
+          >
+            <option value="">Select…</option>
+            {REACTION_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {REACTION_KIND_LABELS[k]}
+              </option>
+            ))}
+          </select>
+          <label htmlFor="reaction-hint">Which message? (optional note)</label>
+          <input
+            id="reaction-hint"
+            placeholder="e.g. Welcome email"
+            value={d.reactsToHint ?? ""}
+            onChange={(e) =>
+              onChange(selected.id, {
+                reactsToHint: e.target.value || undefined,
+              })
+            }
+          />
+          <p className="inspector-hint">
+            Free-text note only — there's no structural link to a specific
+            prior Action node yet (see README → Backlog).
+          </p>
         </>
       ) : null}
       {kind === "wait" ? (
