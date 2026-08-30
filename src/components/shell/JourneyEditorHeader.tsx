@@ -6,6 +6,7 @@ type Props = {
   onTogglePropertiesPanel: () => void;
   propertiesPanelOpen: boolean;
   onDelete: () => void;
+  onOpenTestMode: () => void;
 };
 
 /**
@@ -17,10 +18,9 @@ type Props = {
  * Simulate/Dry run/Undo/Redo/Zoom) live in a secondary row below it, since
  * they aren't part of AJO's actual header.
  *
- * Not everything here is wired up yet: "Manage access" and "Test mode" are
- * intentionally disabled stubs so the layout matches the reference now,
- * without pretending those features exist before their phases land (Test
- * mode is Phase 4 — see README → Roadmap).
+ * "Manage access" stays an intentional disabled stub — there's no
+ * multi-user/permissions model in this authoring tool. "Test mode" is now
+ * wired up (Phase 4) and opens `TestModeModal`.
  */
 export function JourneyEditorHeader({
   journeyName,
@@ -30,6 +30,7 @@ export function JourneyEditorHeader({
   onTogglePropertiesPanel,
   propertiesPanelOpen,
   onDelete,
+  onOpenTestMode,
 }: Props) {
   return (
     <header className="border-b border-slate-200 bg-white px-4 py-2.5">
@@ -77,9 +78,9 @@ export function JourneyEditorHeader({
           </button>
           <button
             type="button"
-            className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-400"
-            disabled
-            title="Test mode is planned for a later phase — see README Roadmap"
+            onClick={onOpenTestMode}
+            className="rounded-md border border-slate-300 px-2.5 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            title="Run a named test profile through the journey, one branch choice at a time"
           >
             Test mode
           </button>

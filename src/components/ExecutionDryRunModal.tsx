@@ -89,7 +89,8 @@ export function ExecutionDryRunModal({ open, onClose, paths, warnings }: Props) 
       >
         <h2 id="exec-modal-title">Dry run</h2>
         <p className="exec-modal-note">
-          Preview only — nothing is sent to email, webhooks, or n8n. Use <strong>Publish</strong> to
+          Preview only — nothing is sent to email, webhooks, or n8n. Uses production-shaped
+          mock data (see Test mode for named, persistent profiles instead). Use <strong>Publish</strong> to
           download a bundle for n8n; activate the workflow there for real runs.
         </p>
         {paths.length > 1 ? (

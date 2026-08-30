@@ -72,3 +72,44 @@ export function useMessageTemplatesQuery() {
     staleTime: 5 * 60 * 1000,
   });
 }
+
+// --- Phase 4: Test mode ---------------------------------------------------
+
+export const testModeKeys = {
+  profiles: ["test-mode", "profiles"] as const,
+  runs: (journeyKey: string, profileId: string) =>
+    ["test-mode", "runs", journeyKey, profileId] as const,
+};
+
+export function useTestProfilesQuery() {
+  return useQuery({
+    queryKey: testModeKeys.profiles,
+    queryFn: api.fetchTestProfiles,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Persisted prior runs for one profile — demonstrates that Test mode profiles are durable, unlike Simulation's ephemeral output. */
+export function useTestRunsQuery(profileId: string | null) {
+  return useQuery({
+    queryKey: testModeKeys.runs(
+      api.CURRENT_JOURNEY_KEY,
+      profileId ?? "none",
+    ),
+    queryFn: () => api.fetchTestRuns(api.CURRENT_JOURNEY_KEY, profileId!),
+    enabled: profileId !== null,
+  });
+}
+
+export function useSaveTestRunMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (run: Omit<api.TestRun, "id" | "completedAt">) =>
+      api.saveTestRun(run),
+    onSuccess: (saved) => {
+      queryClient.invalidateQueries({
+        queryKey: testModeKeys.runs(saved.journeyKey, saved.profileId),
+      });
+    },
+  });
+}

@@ -696,6 +696,183 @@ body {
   background: #f1f5f9;
 }
 
+.test-mode-profiles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.test-mode-profile-card {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.test-mode-profile-card:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.test-mode-profile-name {
+  font-weight: 600;
+  font-size: 0.85rem;
+  color: #0f172a;
+}
+
+.test-mode-profile-desc {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.test-mode-profile-traits {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-top: 0.15rem;
+}
+
+.test-mode-trait-chip {
+  display: inline-block;
+  padding: 0.05rem 0.4rem;
+  border-radius: 999px;
+  background: #ede9fe;
+  border: 1px solid #a78bfa;
+  color: #5b21b6;
+  font-size: 0.62rem;
+}
+
+.test-mode-run-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  padding-bottom: 0.6rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.test-mode-run-header-desc {
+  display: block;
+  font-size: 0.72rem;
+  color: #64748b;
+}
+
+.test-mode-change-profile {
+  flex-shrink: 0;
+  font-size: 0.72rem;
+  color: #2563eb;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+}
+
+.test-mode-history {
+  margin-bottom: 0.75rem;
+  font-size: 0.75rem;
+  color: #475569;
+}
+
+.test-mode-history-title {
+  margin: 0 0 0.25rem;
+  font-weight: 600;
+  color: #334155;
+}
+
+.test-mode-history ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.test-mode-history-empty {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-bottom: 0.75rem;
+}
+
+.test-mode-start {
+  width: 100%;
+  text-align: center;
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  font-weight: 600;
+}
+
+.test-mode-error {
+  padding: 0.5rem 0.6rem;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  color: #991b1b;
+  font-size: 0.78rem;
+}
+
+.test-mode-reached-end {
+  padding: 0.4rem 0.6rem;
+  background: #f0fdf4;
+  border: 1px solid #bbf7d0;
+  border-radius: 6px;
+  color: #166534;
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.test-mode-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0.6rem 0;
+}
+
+.test-mode-options-prompt {
+  margin: 0 0 0.15rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.test-mode-option-btn {
+  padding: 0.4rem 0.6rem;
+  border: 1px solid #f59e0b;
+  border-radius: 6px;
+  background: #fffbeb;
+  color: #92400e;
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.test-mode-option-btn:hover {
+  background: #fef3c7;
+}
+
+.test-mode-actions {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.test-mode-save {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+  font-weight: 600;
+}
+
+.test-mode-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .inspector-leave-prompt .inspector-leave-prompt__body {
   margin: 0 0 0.85rem;
   font-size: 0.82rem;

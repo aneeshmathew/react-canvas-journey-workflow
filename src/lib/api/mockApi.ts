@@ -100,3 +100,114 @@ export async function fetchEvents(): Promise<CatalogItem[]> {
 export async function fetchMessageTemplates(): Promise<CatalogItem[]> {
   return delay(TEMPLATES, 120);
 }
+
+// --- Phase 4: Test mode profiles + persisted test runs -------------------
+//
+// AJO's "Test mode" walks a small set of *persistent* test profiles through
+// the journey, one branch decision at a time — distinct from Simulation
+// (ephemeral, walks every branch automatically) and Dry run (also
+// exhaustive, but framed as "production-shaped data, no real sends"). Since
+// this app has no rule-based Condition logic (branches are named, not
+// evaluated against profile attributes — see README → Phase 2), a profile's
+// path through a Condition can't be computed automatically; a person
+// chooses it by hand in `TestModeModal`, and that choice is what gets
+// persisted here.
+
+export type TestProfile = {
+  id: string;
+  name: string;
+  description: string;
+  traits: string[];
+};
+
+const TEST_PROFILES: TestProfile[] = [
+  {
+    id: "profile-vip",
+    name: "Priya Shah",
+    description: "Loyalty Gold member, frequent purchaser",
+    traits: ["VIP", "Loyalty Gold"],
+  },
+  {
+    id: "profile-new",
+    name: "Sam Rivera",
+    description: "Signed up yesterday, no purchases yet",
+    traits: ["New signup"],
+  },
+  {
+    id: "profile-cart",
+    name: "Jordan Lee",
+    description: "Added items to cart, did not check out",
+    traits: ["Cart abandoner"],
+  },
+];
+
+export async function fetchTestProfiles(): Promise<TestProfile[]> {
+  return delay(TEST_PROFILES, 120);
+}
+
+export type TestRunStep = {
+  nodeId: string;
+  nodeLabel: string;
+  nodeType: string;
+  /** The branch/fallback label chosen to leave this step, if any. */
+  choiceLabel?: string;
+};
+
+export type TestRun = {
+  id: string;
+  /**
+   * This app doesn't have a journey list/id yet (see README → Non-goals /
+   * Phase 5), so runs are scoped to a constant "current journey" bucket
+   * rather than a real journey id. Swapping in real ids is additive once
+   * Phase 5 introduces a journey list.
+   */
+  journeyKey: string;
+  profileId: string;
+  steps: TestRunStep[];
+  reachedEnd: boolean;
+  completedAt: string;
+};
+
+const TEST_RUNS_KEY = "journey-builder:test-runs";
+export const CURRENT_JOURNEY_KEY = "current";
+
+function loadAllTestRuns(): TestRun[] {
+  try {
+    const raw = localStorage.getItem(TEST_RUNS_KEY);
+    return raw ? (JSON.parse(raw) as TestRun[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveAllTestRuns(runs: TestRun[]): void {
+  try {
+    localStorage.setItem(TEST_RUNS_KEY, JSON.stringify(runs));
+  } catch {
+    /* quota or private mode */
+  }
+}
+
+export async function fetchTestRuns(
+  journeyKey: string,
+  profileId: string,
+): Promise<TestRun[]> {
+  const runs = loadAllTestRuns()
+    .filter((r) => r.journeyKey === journeyKey && r.profileId === profileId)
+    .sort((a, b) => b.completedAt.localeCompare(a.completedAt));
+  return delay(runs, 100);
+}
+
+export async function saveTestRun(
+  run: Omit<TestRun, "id" | "completedAt">,
+): Promise<TestRun> {
+  const stamped: TestRun = {
+    ...run,
+    id: crypto.randomUUID(),
+    completedAt: new Date().toISOString(),
+  };
+  const runs = loadAllTestRuns();
+  runs.push(stamped);
+  saveAllTestRuns(runs);
+  return delay(stamped, 150);
+}

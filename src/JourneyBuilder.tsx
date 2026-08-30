@@ -21,6 +21,7 @@ import {
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 import { ExecutionDryRunModal } from "@/components/ExecutionDryRunModal";
+import { TestModeModal } from "@/components/TestModeModal";
 import { Inspector } from "@/components/Inspector";
 import { InspectorLeavePrompt } from "@/components/InspectorLeavePrompt";
 import { PanelResizeHandle } from "@/components/PanelResizeHandle";
@@ -224,6 +225,7 @@ function FlowCanvas() {
 
   const [error, setError] = useState<string | null>(null);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
+  const [testModeOpen, setTestModeOpen] = useState(false);
   const [inspectorNavPrompt, setInspectorNavPrompt] = useState<{
     nextId: string | null;
     fromNodeId: string;
@@ -569,6 +571,13 @@ function FlowCanvas() {
             newJourney();
           }
         }}
+        onOpenTestMode={() => setTestModeOpen(true)}
+      />
+      <TestModeModal
+        open={testModeOpen}
+        onClose={() => setTestModeOpen(false)}
+        nodes={nodes}
+        edges={edges}
       />
       <JourneyPropertiesPanel
         open={propertiesOpen}
@@ -602,8 +611,12 @@ function FlowCanvas() {
         >
           Export
         </button>
-        <button type="button" onClick={runSimulation} title="Walk the entry point → End in the graph">
-          Simulate path
+        <button
+          type="button"
+          onClick={runSimulation}
+          title="Simulation: ephemeral, walks every branch automatically, nothing saved"
+        >
+          Simulation
         </button>
         <button
           type="button"
@@ -611,7 +624,7 @@ function FlowCanvas() {
           disabled={!validation.isValid}
           title={
             validation.isValid
-              ? "Run an animated dry run (no external systems)"
+              ? "Dry run: production-shaped preview, no real sends, walks every branch"
               : "Fix validation issues first"
           }
         >
@@ -685,8 +698,9 @@ function FlowCanvas() {
       {simulation?.kind === "success" ? (
         <div className="sim-banner sim-banner--success" role="status">
           <strong>
-            Simulated {simulation.paths.length} path
-            {simulation.paths.length === 1 ? "" : "s"}:
+            Simulation: {simulation.paths.length} path
+            {simulation.paths.length === 1 ? "" : "s"} found (ephemeral — not
+            saved; use Test mode to save a run):
           </strong>
           <ul className="sim-paths">
             {simulation.paths.map((p, i) => (

@@ -250,7 +250,7 @@ Updated as of Phase 2. Original gap severity is kept alongside current status so
 | Actions / channels | Email, Push, SMS, In-app, Web, Code-based, Content card, Custom action | **Large** | ✅ Mostly resolved (Phase 3): all 8 channel types modeled with per-kind Inspector forms and validation. 🟡 Simplified: each channel collects one content field rather than AJO's full real per-channel schema (e.g. no rich Push deep-link/title split) — see Phase 3's stated scope simplification. |
 | Palette organization | 3 categories (Events / Orchestration / Actions) | Medium | ✅ Resolved (Phase 1 built the accordion, Phase 2 added the 3rd group with corrected categorization). |
 | Validation | Errors block publish; validation is channel/activity-aware | Medium (extend, don't replace) | 🟡 Partial: entry-point, branch-connectivity, and Wait-field rules added (Phase 1/2); still no per-channel validation beyond Email's template-name check. |
-| Testing | 3 modes: Simulation (synthetic users), Test mode (persistent test profiles), Dry run (real prod data, no sends) | **Large** | 🟡 Partial: simulation is now multi-path (Phase 2) but there's still one undifferentiated mode, not AJO's three. Phase 4 (not started). |
+| Testing | 3 modes: Simulation (synthetic users), Test mode (persistent test profiles), Dry run (real prod data, no sends) | **Large** | ✅ Mostly resolved (Phase 4): all 3 modes now exist as distinct flows. 🟡 Test mode's branch resolution is manual (a person clicks the path) rather than AJO's automatic rule-evaluation, since Condition branches here are named, not rule-expressions — see Phase 4's stated scope note. |
 | Publish | Blocked on errors; produces a live, monitored journey | Medium | ❌ Unchanged: `publishBundle.ts` builds a JSON bundle gated on validity, but nothing "goes live" or is monitored. |
 | Reporting | Dedicated analytics/reporting views per journey | **Large** (likely out of scope for near-term phases) | ❌ Unchanged — see Non-goals. |
 | Data model | Journeys reference real Audiences, Events, Data Sources, Custom Actions as first-class configured entities | **Large** | 🟡 Partial: mock catalogs exist and feed Inspector `<datalist>` suggestions (Phase 0), but there's still no real linkage/typed reference, just free-text hints. |
@@ -325,11 +325,16 @@ Known scope gaps carried forward on purpose (not silently dropped):
 
 Verified: `npx tsc -b`, `npm run build`, `npm run lint`, and `npm run test` all pass (38 tests) as of this phase.
 
-### Phase 4 — Testing modes
-- [ ] Rename/reframe the existing dry-run flow as **Simulation** (synthetic user, structural walk) — closest existing analog
-- [ ] Add a **Test mode** concept: a small set of mock "test profiles" (fetched via TanStack Query from the mock API) that get walked through the graph, surfacing which branch each profile takes
-- [ ] Add a **Dry run** mode that's explicitly labeled as "no real sends" and reuses production-shaped mock data
-- [ ] Make `ExecutionDryRunModal` mode-aware (title/copy changes per mode) rather than one fixed "dry run" label
+### Phase 4 — Testing modes ✅ implemented
+- [x] Reframed the "Simulate path" flow as **Simulation** — same underlying `simulateJourney` walk as before (ephemeral, enumerates every branch automatically), but the button, tooltip, and inline banner now say so explicitly and note "not saved" so it reads as one of three distinct modes rather than the only one.
+- [x] Added **Test mode**: a small set of named, persistent test profiles (`fetchTestProfiles` in `lib/api/mockApi.ts`, via `useTestProfilesQuery`), walked through the journey one step at a time in a new `TestModeModal`. At each Condition branch (or ambiguous multi-edge node), a person clicks which way the profile goes — `getWalkOptions`/`findSingleEntryNode` in the new `lib/testModeWalk.ts` are pure, tested helpers for this. Finished runs save via `useSaveTestRunMutation` and persist in `localStorage` (`fetchTestRuns`/`saveTestRun`), and a profile's last few runs are shown before starting a new one — demonstrating the "persistent" half of AJO's Test mode, vs. Simulation's ephemeral output.
+- [x] Reframed **Dry run** — same multi-path `ExecutionDryRunModal` from Phase 2, note text now explicitly says "production-shaped mock data" and points at Test mode as the alternative when you want a named, reusable profile instead of an exhaustive branch walk.
+- [x] `JourneyEditorHeader`'s "Test mode" button, previously a disabled Phase-1 stub, is now wired to open `TestModeModal`.
+- [x] Added `testModeWalk.test.ts` (new) covering the pure walk-option/entry-node helpers.
+
+**Honest scope note — why a person picks the branch instead of the app:** AJO's real Condition activities evaluate a rule against actual profile/audience data to decide the branch automatically. This app's Condition nodes have *named* branches (Phase 2) but no rule-expression language behind them — nothing here evaluates "is this profile a VIP" against anything. So Test mode can't compute which branch a profile "really" takes; a person decides it by hand at each step, and *that decision* is what gets persisted as the test run. This is a deliberately honest simplification rather than a fake auto-resolution that would look like real rule evaluation but wasn't.
+
+Verified: `npx tsc -b`, `npm run build`, `npm run lint`, and `npm run test` all pass (43 tests) as of this phase.
 
 ### Phase 5 — Publish & monitoring (stretch)
 - [ ] Extend `publishBundle.ts` / `lib/adapters/n8n.ts` from a stub into a real compiler once node types stabilize (Phases 1–3)
