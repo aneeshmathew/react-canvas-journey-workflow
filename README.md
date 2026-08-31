@@ -264,9 +264,3 @@ Scope correction, stated directly: the original plan called for "a minimal journ
 - Full reporting/analytics — no mock numbers are fabricated; the publish-history view shows structural facts only
 - Multi-user collaboration/permissions
 - Real multi-journey CRUD — a single journey is edited at a time (see Phase 5's publish-history scope correction); the underlying architectural change (journey ids threaded through the store/queries/editor) is real work, not a small add-on, and is intentionally not scheduled
-
----
-
-## License
-
-Private / project-specific — add a `LICENSE` file if you need to publish terms.
