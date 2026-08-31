@@ -70,6 +70,28 @@ export function useEventsQuery() {
   });
 }
 
+/** Events are a real, user-managed catalog (unlike Audiences/Templates, still static) — see `EventsManagerModal`. */
+export function useCreateEventMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { name: string; description?: string }) =>
+      api.createEvent(input),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: catalogKeys.events });
+    },
+  });
+}
+
+export function useDeleteEventMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteEvent(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: catalogKeys.events });
+    },
+  });
+}
+
 export function useMessageTemplatesQuery() {
   return useQuery({
     queryKey: catalogKeys.templates,

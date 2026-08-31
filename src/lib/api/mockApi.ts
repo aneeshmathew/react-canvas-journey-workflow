@@ -130,13 +130,6 @@ const AUDIENCES: CatalogItem[] = [
   { id: "aud-loyalty-gold", name: "Loyalty program — Gold members" },
 ];
 
-const EVENTS: CatalogItem[] = [
-  { id: "evt-signup", name: "Account sign-up" },
-  { id: "evt-cart-abandon", name: "Cart abandoned" },
-  { id: "evt-purchase", name: "Purchase completed" },
-  { id: "evt-lobby-beacon", name: "Lobby beacon check-in" },
-];
-
 const TEMPLATES: CatalogItem[] = [
   { id: "tpl-welcome", name: "Welcome email" },
   { id: "tpl-cart-reminder", name: "Cart reminder" },
@@ -147,12 +140,71 @@ export async function fetchAudiences(): Promise<CatalogItem[]> {
   return delay(AUDIENCES, 120);
 }
 
-export async function fetchEvents(): Promise<CatalogItem[]> {
-  return delay(EVENTS, 120);
-}
-
 export async function fetchMessageTemplates(): Promise<CatalogItem[]> {
   return delay(TEMPLATES, 120);
+}
+
+// --- Events catalog: persisted and user-editable --------------------------
+//
+// Unlike Audiences/Templates (still a static mock list), Events are a real,
+// user-managed catalog — see the "Events" nav item / `EventsManagerModal`.
+// Creating an event here immediately shows up as a `<datalist>` suggestion
+// in the Inspector's event-key field for any event-based node. Audiences
+// and Templates could follow the same pattern later; scoped to Events only
+// for now since that's what was asked for.
+
+const EVENTS_KEY = "journey-builder:events";
+
+const DEFAULT_EVENTS: CatalogItem[] = [
+  { id: "evt-signup", name: "Account sign-up" },
+  { id: "evt-cart-abandon", name: "Cart abandoned" },
+  { id: "evt-purchase", name: "Purchase completed" },
+  { id: "evt-lobby-beacon", name: "Lobby beacon check-in" },
+];
+
+function loadEvents(): CatalogItem[] {
+  try {
+    const raw = localStorage.getItem(EVENTS_KEY);
+    if (raw) return JSON.parse(raw) as CatalogItem[];
+  } catch {
+    /* fall through to defaults */
+  }
+  // Return a copy, not the shared constant — callers like `createEvent`
+  // push onto whatever this returns, and mutating `DEFAULT_EVENTS` itself
+  // would silently corrupt every subsequent "no saved events yet" read.
+  return [...DEFAULT_EVENTS];
+}
+
+function saveEventsList(list: CatalogItem[]): void {
+  try {
+    localStorage.setItem(EVENTS_KEY, JSON.stringify(list));
+  } catch {
+    /* quota or private mode */
+  }
+}
+
+export async function fetchEvents(): Promise<CatalogItem[]> {
+  return delay(loadEvents(), 120);
+}
+
+export async function createEvent(input: {
+  name: string;
+  description?: string;
+}): Promise<CatalogItem> {
+  const item: CatalogItem = {
+    id: crypto.randomUUID(),
+    name: input.name.trim(),
+    description: input.description?.trim() || undefined,
+  };
+  const list = loadEvents();
+  list.push(item);
+  saveEventsList(list);
+  return delay(item, 150);
+}
+
+export async function deleteEvent(id: string): Promise<void> {
+  saveEventsList(loadEvents().filter((e) => e.id !== id));
+  return delay(undefined, 100);
 }
 
 // --- Phase 4: Test mode profiles + persisted test runs -------------------

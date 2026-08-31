@@ -59,7 +59,8 @@ src/
 │   │   ├── AppShell.tsx            # Left nav rail + content area
 │   │   ├── JourneyEditorHeader.tsx # Name, status, Alerts, Test mode, Delete, properties toggle
 │   │   ├── JourneyPropertiesPanel.tsx # Name + description panel
-│   │   └── PublishHistoryModal.tsx # Publish history (opened from the nav rail)
+│   │   ├── PublishHistoryModal.tsx # Publish history (opened from the nav rail)
+│   │   └── EventsManagerModal.tsx  # Create/delete named events (opened from the nav rail)
 │   ├── palette/
 │   │   └── Palette.tsx             # Accordion: Events / Orchestration / Actions / Fragments + search
 │   ├── nodes/
@@ -94,6 +95,7 @@ src/
 - **`ExecutionDryRunModal`** — Multi-path animated preview with a path-tab selector, used by both the Simulation banner data and the Dry run modal.
 - **`TestModeModal`** — Named, persistent test profiles walked through the journey one branch decision at a time; completed runs are saved and shown again next time that profile is tested.
 - **`PublishHistoryModal`** — A history of past publishes of the one journey this app edits (see [Gap analysis](#gap-analysis-known-limitations) on why this isn't a full multi-journey list).
+- **`EventsManagerModal`** — Create and delete named events; a real, persisted catalog (unlike Audiences/Templates, still static) that immediately feeds the `<datalist>` suggestions in any event-based node's Inspector field.
 
 ---
 
@@ -158,6 +160,7 @@ So: **authoring** = this UI; **running in production** = envisioned as importing
 | `journey-builder:test-runs` | Saved Test mode runs, per profile |
 | `journey-builder:fragments` | Saved Journey Fragments |
 | `journey-builder:publish-history` | Publish history records |
+| `journey-builder:events` | User-created events catalog |
 
 ---
 
@@ -189,7 +192,7 @@ Read Audience sits under **Orchestration** rather than Events: a scheduled/batch
 
 ### Layout
 
-- **Left nav rail** (`AppShell`) — scoped to a single destination, "Journeys" (opens publish history). This app builds journeys and nothing else, so there's no reason to build out placeholder nav sections for capabilities that don't exist yet.
+- **Left nav rail** (`AppShell`) — two destinations: "Journeys" (publish history) and "Events" (the events catalog manager). This app builds journeys and manages the catalog data they reference, and nothing else, so there's no reason to build out placeholder nav sections for capabilities that don't exist yet.
 - **Journey editor header** (`JourneyEditorHeader`) — name, Draft/Version/saved status, Alerts (wired to real validation output), Test mode, Delete, and a properties-panel toggle. "Manage access" is an intentionally disabled stub — there's no multi-user/permissions model in this authoring tool.
 - **Secondary toolbar** — the authoring conveniences that aren't part of the header concept above: Import/Export, Simulation/Dry run/Publish, Undo/Redo, Copy/Paste/Save as Fragment, Zoom.
 
@@ -210,7 +213,7 @@ Honest status of every area this app's design touches, so nothing reads as more 
 | Testing | 3 distinct modes: Simulation, Test mode, Dry run | Test mode's branch resolution is manual (a person clicks the path) since Condition branches are named, not rule-expressions — there's nothing to evaluate a profile against automatically |
 | Publish | Compiles a real (best-effort) n8n workflow structurally; publish history view | Nothing "goes live" — there's no execution backend, real or mock, for a published journey to actually run against |
 | Reporting | — | Not built, and not faked — see Non-goals |
-| Data model | Mock catalogs feed Inspector `<datalist>` suggestions | No real linkage/typed reference to audiences/events/templates, just free-text hints |
+| Data model | Events are a real, persisted, user-manageable catalog (`EventsManagerModal`); Audiences and Message templates are still a fixed mock list feeding Inspector `<datalist>` suggestions | No real typed *reference* even for Events — an event-based node stores the event's name as free text, not a link to its catalog id, so renaming an event doesn't update nodes that already reference the old name |
 | Journey Fragments | Save-selection-as-fragment, browse/drag from palette, insert with fresh ids | No rename/edit of a saved fragment after creation (delete only) |
 | Reaction events | Modeled with a reaction kind (opened/clicked/bounced/unsubscribed) | No structural link to the specific prior Action node it reacts to — only a free-text hint |
 | State management | Zustand store with undo/redo, copy/paste clipboard | Undo/redo covers structural edits and Inspector save/close, not every keystroke while a field is focused |
@@ -254,6 +257,11 @@ Scope correction, stated directly: the original plan called for "a minimal journ
 - **Journey Fragments** — a reusable node/edge library. "Save as Fragment" extracts the current canvas selection (`lib/cloneGraph.ts`), persists it via the mock API, and a Fragments palette group lists them for drag-and-drop insertion (fresh ids, dropped near the cursor). Entry-point nodes are excluded from extraction, since duplicating one would immediately break the single-entry-point rule.
 - **Node copy/paste** — `Ctrl/Cmd+C/V` plus toolbar buttons, built on the same subgraph-cloning helper as Journey Fragments so both features share one tested implementation rather than two.
 - **Reaction events** — a new `event-reaction` node type for opened/clicked/bounced/unsubscribed engagement signals, with a stated limitation: there's no structural link to the specific prior Action node it reacts to, only a free-text note.
+
+### Post-backlog: Events catalog management
+The nav rail's "Journeys" item had no counterpart for managing the catalog data journeys reference. Added an **Events** nav item opening `EventsManagerModal`, backed by a real (if `localStorage`-only) persisted catalog with create/delete — the first catalog type to move off the static mock-list pattern that Audiences and Message templates still use. A real bug surfaced and was fixed while adding this: the mock API's "no events saved yet" fallback returned the shared default-events constant *by reference* rather than a copy, so the first `createEvent` call would silently mutate that shared constant instead of the intended list — caught by a new test (`mockApi.test.ts`) before it shipped, not after.
+
+Known limitation, stated directly: an event-based node stores an event's *name* as free text, not a reference to its catalog id — so renaming an event in the catalog won't update nodes that already reference the old name under the hood. Audiences and Message templates could follow the same real-catalog pattern later; scoped to Events only since that's what was asked for.
 
 ---
 

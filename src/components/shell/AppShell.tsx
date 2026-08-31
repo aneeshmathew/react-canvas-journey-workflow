@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 type Props = {
   children: ReactNode;
   onJourneysClick?: () => void;
+  onEventsClick?: () => void;
 };
 
 /**
@@ -11,16 +12,18 @@ type Props = {
  * Scoped deliberately: full-featured journey-orchestration products
  * typically have a dozen nav sections (Campaigns, Landing pages, Decision
  * Management, Content Management, Data Management, Connections, Customer,
- * Privacy, Administration, ...). This app only builds journeys, so the
- * rail has exactly one destination — see README → "UI layout reference
- * (target)" → "1. Outer app shell — left nav rail". The other sections are
- * omitted, not hidden, until a phase actually needs them.
+ * Privacy, Administration, ...). This app only builds journeys and manages
+ * the events catalog they reference, so the rail has exactly two
+ * destinations — see README → "UI layout reference (target)" → "1. Outer
+ * app shell — left nav rail". Other sections are omitted, not hidden,
+ * until a phase actually needs them.
  *
- * The "Journeys" item opens `PublishHistoryModal` (Phase 5) — see that
- * component for why it's a publish-history list rather than a real
- * multi-journey list.
+ * "Journeys" opens `PublishHistoryModal` (Phase 5) — see that component
+ * for why it's a publish-history list rather than a real multi-journey
+ * list. "Events" opens `EventsManagerModal` — a real, persisted catalog of
+ * named events, distinct from the still-static Audiences/Templates lists.
  */
-export function AppShell({ children, onJourneysClick }: Props) {
+export function AppShell({ children, onJourneysClick, onEventsClick }: Props) {
   return (
     <div className="flex h-screen w-full bg-slate-100">
       <nav
@@ -36,7 +39,6 @@ export function AppShell({ children, onJourneysClick }: Props) {
         </div>
         <button
           type="button"
-          aria-current="page"
           title="Journeys"
           onClick={onJourneysClick}
           className="flex w-11 flex-col items-center gap-1 rounded-md bg-slate-800 py-2 text-[10px] font-medium text-white hover:bg-slate-700"
@@ -45,6 +47,17 @@ export function AppShell({ children, onJourneysClick }: Props) {
             🧭
           </span>
           Journeys
+        </button>
+        <button
+          type="button"
+          title="Events"
+          onClick={onEventsClick}
+          className="flex w-11 flex-col items-center gap-1 rounded-md py-2 text-[10px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white"
+        >
+          <span aria-hidden="true" className="text-base leading-none">
+            ⚡
+          </span>
+          Events
         </button>
       </nav>
       <div className="flex min-w-0 flex-1 flex-col">{children}</div>
