@@ -49,7 +49,7 @@ export function Inspector({
 }: Props) {
   const [savedFlash, setSavedFlash] = useState(false);
   // Phase 0: these come from the mock API via TanStack Query — real catalogs
-  // (Adobe Experience Platform audiences, configured events, message
+  // (a real customer-data platform's audiences, configured events, message
   // templates) slot in behind the same hooks later without touching this
   // component. For now they're offered as <datalist> suggestions rather
   // than hard selects, since the field itself is still a free-text hint.

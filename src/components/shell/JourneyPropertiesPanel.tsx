@@ -8,15 +8,15 @@ type Props = {
 };
 
 /**
- * Journey-level properties, per AJO's "Create" step (name + description
- * before/alongside canvas design — see README → Roadmap → Phase 1).
+ * Journey-level properties: name + description, defined up front alongside
+ * canvas design (see README → Roadmap → Phase 1).
  *
- * Scope note: entry-point *type* selection is deliberately NOT here.
- * In AJO's actual model the entry point is the first canvas activity
- * (dragged from the Events palette), not a field in a properties dialog —
- * the screenshot's "LobbyBeacon / Unitary event" node is a canvas node, not
- * a form field. Putting entry-type selection here too would just create a
- * second, conflicting way to set the same thing, so this panel only owns
+ * Scope note: entry-point *type* selection is deliberately NOT here. The
+ * entry point is the first canvas activity (dragged from the Events
+ * palette), not a field in a properties dialog — an example entry node
+ * like "LobbyBeacon / Unitary event" is a canvas node, not a form field.
+ * Putting entry-type selection here too would just create a second,
+ * conflicting way to set the same thing, so this panel only owns
  * name + description.
  */
 export function JourneyPropertiesPanel({

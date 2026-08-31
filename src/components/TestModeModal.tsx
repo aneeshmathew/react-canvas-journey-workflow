@@ -28,7 +28,7 @@ function nodeStep(n: Node<JourneyNodeData>): TestRunStep {
 }
 
 /**
- * AJO's Test mode: a small set of *named, reusable* profiles walked through
+ * Test mode: a small set of *named, reusable* profiles walked through
  * the journey — distinct from Simulation (ephemeral, walks every branch
  * automatically) and Dry run (also automatic, framed as production-shaped
  * no-send preview). Because Condition branches here are named rather than

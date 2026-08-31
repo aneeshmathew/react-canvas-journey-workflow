@@ -17,13 +17,12 @@ type PaletteItem = {
 };
 
 /**
- * Per README → "UI layout reference (target)" → palette section, corrected
- * against Adobe's "Design your journey" doc: Read Audience is actually an
- * **Orchestration** activity in AJO, not an Events one — the doc's own
- * screenshot shows "ORCHESTRATION (3)", which lines up with exactly three
- * items once Condition and Wait exist: Read Audience, Condition, Wait.
- * (An earlier pass here had Read Audience under Events — that was wrong
- * and is fixed by this grouping.)
+ * Per README → "UI layout reference (target)" → palette section: Read
+ * Audience is grouped under **Orchestration**, not Events — a batch/
+ * scheduled audience read behaves like an orchestration step (alongside
+ * Condition and Wait) rather than an inbound signal. (An earlier pass here
+ * had Read Audience under Events — that was wrong and is fixed by this
+ * grouping.)
  */
 const EVENTS_ITEMS: PaletteItem[] = [
   {
@@ -47,7 +46,7 @@ const EVENTS_ITEMS: PaletteItem[] = [
   {
     type: "audience",
     label: "Audience",
-    subtitle: "Mid-journey audience check (legacy — not a real AJO activity)",
+    subtitle: "Mid-journey audience check (legacy placeholder node)",
     icon: "👥",
   },
   {

@@ -60,7 +60,7 @@ function n8nShapeFor(node: Node<JourneyNodeData>): {
       };
     }
     // Audience Qualification, Unitary event, Business event are all
-    // real-time entry points in AJO — modeled as webhook triggers.
+    // real-time entry points — modeled as webhook triggers.
     const path = String(d.eventKey ?? d.segmentHint ?? node.id)
       .trim()
       .toLowerCase()
@@ -134,7 +134,7 @@ function n8nShapeFor(node: Node<JourneyNodeData>): {
     };
   }
 
-  // Legacy mid-journey `audience`/`event` placeholders (predate the AJO
+  // Legacy mid-journey `audience`/`event` placeholders (predate the
   // entry-point model — see README → Product direction) and anything else
   // unrecognized.
   return {

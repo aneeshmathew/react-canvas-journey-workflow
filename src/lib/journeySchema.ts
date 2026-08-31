@@ -3,7 +3,8 @@ import type { Edge, Node } from "@xyflow/react";
 export const JOURNEY_VERSION = 1 as const;
 
 /**
- * Entry-point activities, modeled after AJO's four entry types (see
+ * Entry-point activities, modeled on the four-entry-type pattern common to
+ * journey-orchestration tools (see
  * README → Product direction → Entry-point model). Exactly one of these
  * must exist per journey, with no incoming edges — enforced in
  * `journeyValidation.ts`.
@@ -38,7 +39,7 @@ export const ENTRY_NODE_LABELS: Record<
 
 /**
  * Action (channel) activities, generalized in Phase 3 from the original
- * single `"email"` node into AJO's full family. Each differs in icon,
+ * single `"email"` node into the full Action-channel family. Each differs in icon,
  * default subtitle, and which data field(s) it collects — see
  * `ACTION_DATA_FIELD` below and `Inspector.tsx` for the per-kind field
  * switch.
@@ -143,7 +144,7 @@ export const DEFAULT_CONDITION_BRANCHES = ["Yes", "No"] as const;
 export type WaitUnit = "minutes" | "hours" | "days";
 
 /**
- * AJO's "Reaction events" — a mid-journey Events entry that reacts to how a
+ * "Reaction events" — a mid-journey Events entry that reacts to how a
  * profile engaged with a previously-sent message (opened, clicked, bounced,
  * unsubscribed), rather than an entirely new inbound signal. See README →
  * Backlog. This app doesn't have a real link between a Reaction event node
@@ -179,7 +180,7 @@ export type JourneyNodeData = {
   reactsToHint?: string;
   /** Condition node: named outgoing branches. Each is rendered as its own source handle. */
   branches?: string[];
-  /** Condition/Action nodes: AJO's "Add an alternative path in case of a timeout or an error." */
+  /** Condition/Action nodes: "Add an alternative path in case of a timeout or an error." */
   hasErrorFallback?: boolean;
   /** Wait node: fixed-duration wait before continuing. */
   waitAmount?: number;

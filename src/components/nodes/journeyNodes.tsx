@@ -47,7 +47,7 @@ function Base({
   subtitle?: string;
   target?: boolean;
   source?: boolean;
-  /** Optional second output (AJO's "alternative path on timeout/error"), rendered off the bottom edge so it reads as distinct from the main flow. */
+  /** Optional second output ("alternative path on timeout/error"), rendered off the bottom edge so it reads as distinct from the main flow. */
   extraHandle?: { id: string; label: string };
   /** Overrides the static `ICONS` lookup — used by node families (Entry, Action) whose icon varies per sub-kind rather than per top-level `type`. */
   icon?: string;

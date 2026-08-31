@@ -9,7 +9,7 @@
  * file and the query hooks that wrap it.
  *
  * `fetchAudiences` / `fetchEvents` / `fetchMessageTemplates` model the
- * catalogs AJO reads from (Audiences, Events, Message templates). They're
+ * catalogs a real backend would expose (Audiences, Events, Message templates). They're
  * static in-memory lists for now — Phase 3 is expected to wire real
  * selections from these catalogs into the Inspector per node type.
  */
@@ -157,7 +157,7 @@ export async function fetchMessageTemplates(): Promise<CatalogItem[]> {
 
 // --- Phase 4: Test mode profiles + persisted test runs -------------------
 //
-// AJO's "Test mode" walks a small set of *persistent* test profiles through
+// "Test mode" walks a small set of *persistent* test profiles through
 // the journey, one branch decision at a time — distinct from Simulation
 // (ephemeral, walks every branch automatically) and Dry run (also
 // exhaustive, but framed as "production-shaped data, no real sends"). Since

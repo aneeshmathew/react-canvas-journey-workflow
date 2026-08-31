@@ -10,13 +10,13 @@ type Props = {
 };
 
 /**
- * Mirrors the AJO screenshot's top bar: back arrow, editable journey name,
+ * A top bar for journey identity: back arrow, editable journey name,
  * a Journey/Draft/Version/saved-status row, and a right-aligned action
  * cluster (Alerts, Manage access, Test mode, Delete, info). This replaces
  * the old flat `.app-toolbar` for journey-identity concerns — the extra
- * authoring tools this app has that AJO's chrome doesn't (Import/Export/
- * Simulate/Dry run/Undo/Redo/Zoom) live in a secondary row below it, since
- * they aren't part of AJO's actual header.
+ * authoring tools this app has that this reference layout doesn't
+ * (Import/Export/Simulate/Dry run/Undo/Redo/Zoom) live in a secondary row
+ * below it, since they aren't part of this header's actual scope.
  *
  * "Manage access" stays an intentional disabled stub — there's no
  * multi-user/permissions model in this authoring tool. "Test mode" is now
