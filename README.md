@@ -95,7 +95,7 @@ src/
 - **`ExecutionDryRunModal`** — Multi-path animated preview with a path-tab selector, used by both the Simulation banner data and the Dry run modal.
 - **`TestModeModal`** — Named, persistent test profiles walked through the journey one branch decision at a time; completed runs are saved and shown again next time that profile is tested.
 - **`PublishHistoryModal`** — A history of past publishes of the one journey this app edits (see [Gap analysis](#gap-analysis-known-limitations) on why this isn't a full multi-journey list).
-- **`EventsManagerModal`** — Create and delete named events; a real, persisted catalog (unlike Audiences/Templates, still static) that immediately feeds the `<datalist>` suggestions in any event-based node's Inspector field.
+- **`EventsManagerModal`** — Create, edit, and delete named events (Label, Description, Type, Event id type, Timeout); a real, persisted catalog (unlike Audiences/Templates, still static) that immediately feeds the `<datalist>` suggestions in any event-based node's Inspector field.
 
 ---
 
@@ -213,7 +213,7 @@ Honest status of every area this app's design touches, so nothing reads as more 
 | Testing | 3 distinct modes: Simulation, Test mode, Dry run | Test mode's branch resolution is manual (a person clicks the path) since Condition branches are named, not rule-expressions — there's nothing to evaluate a profile against automatically |
 | Publish | Compiles a real (best-effort) n8n workflow structurally; publish history view | Nothing "goes live" — there's no execution backend, real or mock, for a published journey to actually run against |
 | Reporting | — | Not built, and not faked — see Non-goals |
-| Data model | Events are a real, persisted, user-manageable catalog (`EventsManagerModal`); Audiences and Message templates are still a fixed mock list feeding Inspector `<datalist>` suggestions | No real typed *reference* even for Events — an event-based node stores the event's name as free text, not a link to its catalog id, so renaming an event doesn't update nodes that already reference the old name |
+| Data model | Events are a real, persisted, user-manageable catalog with create/edit/delete (`EventsManagerModal`); Audiences and Message templates are still a fixed mock list feeding Inspector `<datalist>` suggestions | No real typed *reference* even for Events — an event-based node stores the event's name as free text, not a link to its catalog id, so renaming an event doesn't update nodes that already reference the old name. Event id type and Timeout fields are captured but not used by validation/simulation yet. |
 | Journey Fragments | Save-selection-as-fragment, browse/drag from palette, insert with fresh ids | No rename/edit of a saved fragment after creation (delete only) |
 | Reaction events | Modeled with a reaction kind (opened/clicked/bounced/unsubscribed) | No structural link to the specific prior Action node it reacts to — only a free-text hint |
 | State management | Zustand store with undo/redo, copy/paste clipboard | Undo/redo covers structural edits and Inspector save/close, not every keystroke while a field is focused |
@@ -259,9 +259,16 @@ Scope correction, stated directly: the original plan called for "a minimal journ
 - **Reaction events** — a new `event-reaction` node type for opened/clicked/bounced/unsubscribed engagement signals, with a stated limitation: there's no structural link to the specific prior Action node it reacts to, only a free-text note.
 
 ### Post-backlog: Events catalog management
-The nav rail's "Journeys" item had no counterpart for managing the catalog data journeys reference. Added an **Events** nav item opening `EventsManagerModal`, backed by a real (if `localStorage`-only) persisted catalog with create/delete — the first catalog type to move off the static mock-list pattern that Audiences and Message templates still use. A real bug surfaced and was fixed while adding this: the mock API's "no events saved yet" fallback returned the shared default-events constant *by reference* rather than a copy, so the first `createEvent` call would silently mutate that shared constant instead of the intended list — caught by a new test (`mockApi.test.ts`) before it shipped, not after.
+The nav rail's "Journeys" item had no counterpart for managing the catalog data journeys reference. Added an **Events** nav item opening `EventsManagerModal`, backed by a real (if `localStorage`-only) persisted catalog with full create/edit/delete — the first catalog type to move off the static mock-list pattern that Audiences and Message templates still use. A real bug surfaced and was fixed while adding this: the mock API's "no events saved yet" fallback returned the shared default-events constant *by reference* rather than a copy, so the first `createEvent` call would silently mutate that shared constant instead of the intended list — caught by a new test (`mockApi.test.ts`) before it shipped, not after.
 
-Known limitation, stated directly: an event-based node stores an event's *name* as free text, not a reference to its catalog id — so renaming an event in the catalog won't update nodes that already reference the old name under the hood. Audiences and Message templates could follow the same real-catalog pattern later; scoped to Events only since that's what was asked for.
+Revised after feedback that the first pass's modal was too cramped (a 3-input inline row overflowed a 420px-wide modal): widened it (`.exec-modal--wide`) and expanded the event record itself — Label, Description, Type (Unitary/Business), Event id type (System generated/Custom), a Timeout section (checkbox + conditional duration), plus read-only Author/Created metadata — modeled on the layout common to event-configuration panels in journey-orchestration tools generally, not just a name+description pair. Existing events are now editable in place (click a row to open its form), not just deletable.
+
+Known limitations, stated directly:
+- An event-based node stores an event's *name* as free text, not a reference to its catalog id — renaming an event won't update nodes that already reference the old name.
+- "Author" is a fixed placeholder ("You") — there's no real identity system in this single-user tool, so it's a display field for layout fidelity, not a real feature.
+- "Event id type" and the Timeout fields are captured and persisted but not wired into validation or simulation anywhere yet — they exist because the reference layout has them, not because journey behavior currently depends on them.
+
+Audiences and Message templates could follow the same real-catalog-with-edit pattern later; scoped to Events only since that's what was asked for.
 
 ---
 
@@ -272,3 +279,9 @@ Known limitation, stated directly: an event-based node stores an event's *name* 
 - Full reporting/analytics — no mock numbers are fabricated; the publish-history view shows structural facts only
 - Multi-user collaboration/permissions
 - Real multi-journey CRUD — a single journey is edited at a time (see Phase 5's publish-history scope correction); the underlying architectural change (journey ids threaded through the store/queries/editor) is real work, not a small add-on, and is intentionally not scheduled
+
+---
+
+## License
+
+Private / project-specific — add a `LICENSE` file if you need to publish terms.

@@ -153,29 +153,63 @@ export async function fetchMessageTemplates(): Promise<CatalogItem[]> {
 // and Templates could follow the same pattern later; scoped to Events only
 // for now since that's what was asked for.
 
-const EVENTS_KEY = "journey-builder:events";
+export type EventIdType = "system-generated" | "custom";
+export type EventTimeoutUnit = "minutes" | "hours" | "days";
 
-const DEFAULT_EVENTS: CatalogItem[] = [
-  { id: "evt-signup", name: "Account sign-up" },
-  { id: "evt-cart-abandon", name: "Cart abandoned" },
-  { id: "evt-purchase", name: "Purchase completed" },
-  { id: "evt-lobby-beacon", name: "Lobby beacon check-in" },
+export type EventDefinition = {
+  id: string;
+  /** Called "Label" in the editor UI — kept as `name` here so the rest of the app (which reads `CatalogItem.name`) doesn't need a special case. */
+  name: string;
+  description?: string;
+  type: "unitary" | "business";
+  eventIdType: EventIdType;
+  timeoutEnabled: boolean;
+  timeoutAmount?: number;
+  timeoutUnit?: EventTimeoutUnit;
+  /** Single-user mock app — always the same placeholder author, kept as a field for layout/structural fidelity rather than a real identity system. */
+  author: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const EVENTS_KEY = "journey-builder:events";
+const MOCK_AUTHOR = "You";
+
+function makeDefaultEvent(id: string, name: string): EventDefinition {
+  const now = new Date().toISOString();
+  return {
+    id,
+    name,
+    type: "unitary",
+    eventIdType: "system-generated",
+    timeoutEnabled: false,
+    author: MOCK_AUTHOR,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+const DEFAULT_EVENTS: EventDefinition[] = [
+  makeDefaultEvent("evt-signup", "Account sign-up"),
+  makeDefaultEvent("evt-cart-abandon", "Cart abandoned"),
+  makeDefaultEvent("evt-purchase", "Purchase completed"),
+  makeDefaultEvent("evt-lobby-beacon", "Lobby beacon check-in"),
 ];
 
-function loadEvents(): CatalogItem[] {
+function loadEvents(): EventDefinition[] {
   try {
     const raw = localStorage.getItem(EVENTS_KEY);
-    if (raw) return JSON.parse(raw) as CatalogItem[];
+    if (raw) return JSON.parse(raw) as EventDefinition[];
   } catch {
     /* fall through to defaults */
   }
   // Return a copy, not the shared constant — callers like `createEvent`
   // push onto whatever this returns, and mutating `DEFAULT_EVENTS` itself
   // would silently corrupt every subsequent "no saved events yet" read.
-  return [...DEFAULT_EVENTS];
+  return DEFAULT_EVENTS.map((e) => ({ ...e }));
 }
 
-function saveEventsList(list: CatalogItem[]): void {
+function saveEventsList(list: EventDefinition[]): void {
   try {
     localStorage.setItem(EVENTS_KEY, JSON.stringify(list));
   } catch {
@@ -183,23 +217,74 @@ function saveEventsList(list: CatalogItem[]): void {
   }
 }
 
+/** `useEventsQuery` / the Inspector's `<datalist>` only need id+name+description, so this keeps that call site unchanged even though Events grew richer fields. */
 export async function fetchEvents(): Promise<CatalogItem[]> {
+  return delay(
+    loadEvents().map(({ id, name, description }) => ({ id, name, description })),
+    120,
+  );
+}
+
+export async function fetchEventDefinitions(): Promise<EventDefinition[]> {
   return delay(loadEvents(), 120);
 }
 
-export async function createEvent(input: {
+export type EventDefinitionInput = {
   name: string;
   description?: string;
-}): Promise<CatalogItem> {
-  const item: CatalogItem = {
+  type: EventDefinition["type"];
+  eventIdType: EventIdType;
+  timeoutEnabled: boolean;
+  timeoutAmount?: number;
+  timeoutUnit?: EventTimeoutUnit;
+};
+
+export async function createEvent(
+  input: EventDefinitionInput,
+): Promise<EventDefinition> {
+  const now = new Date().toISOString();
+  const item: EventDefinition = {
     id: crypto.randomUUID(),
     name: input.name.trim(),
     description: input.description?.trim() || undefined,
+    type: input.type,
+    eventIdType: input.eventIdType,
+    timeoutEnabled: input.timeoutEnabled,
+    timeoutAmount: input.timeoutEnabled ? input.timeoutAmount : undefined,
+    timeoutUnit: input.timeoutEnabled ? input.timeoutUnit : undefined,
+    author: MOCK_AUTHOR,
+    createdAt: now,
+    updatedAt: now,
   };
   const list = loadEvents();
   list.push(item);
   saveEventsList(list);
   return delay(item, 150);
+}
+
+export async function updateEvent(
+  id: string,
+  input: EventDefinitionInput,
+): Promise<EventDefinition> {
+  const list = loadEvents();
+  const idx = list.findIndex((e) => e.id === id);
+  if (idx === -1) {
+    throw new Error(`Event "${id}" not found.`);
+  }
+  const updated: EventDefinition = {
+    ...list[idx]!,
+    name: input.name.trim(),
+    description: input.description?.trim() || undefined,
+    type: input.type,
+    eventIdType: input.eventIdType,
+    timeoutEnabled: input.timeoutEnabled,
+    timeoutAmount: input.timeoutEnabled ? input.timeoutAmount : undefined,
+    timeoutUnit: input.timeoutEnabled ? input.timeoutUnit : undefined,
+    updatedAt: new Date().toISOString(),
+  };
+  list[idx] = updated;
+  saveEventsList(list);
+  return delay(updated, 150);
 }
 
 export async function deleteEvent(id: string): Promise<void> {

@@ -11,6 +11,7 @@ export const journeyKeys = {
 export const catalogKeys = {
   audiences: ["catalog", "audiences"] as const,
   events: ["catalog", "events"] as const,
+  eventDefinitions: ["catalog", "event-definitions"] as const,
   templates: ["catalog", "templates"] as const,
 };
 
@@ -70,15 +71,35 @@ export function useEventsQuery() {
   });
 }
 
+/** Full event records (Label/Type/Timeout/etc.) for `EventsManagerModal` — `useEventsQuery` above stays the lighter id/name/description shape everything else already expects. */
+export function useEventDefinitionsQuery() {
+  return useQuery({
+    queryKey: catalogKeys.eventDefinitions,
+    queryFn: api.fetchEventDefinitions,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+function invalidateEventQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: catalogKeys.events });
+  queryClient.invalidateQueries({ queryKey: catalogKeys.eventDefinitions });
+}
+
 /** Events are a real, user-managed catalog (unlike Audiences/Templates, still static) — see `EventsManagerModal`. */
 export function useCreateEventMutation() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (input: { name: string; description?: string }) =>
-      api.createEvent(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: catalogKeys.events });
-    },
+    mutationFn: (input: api.EventDefinitionInput) => api.createEvent(input),
+    onSuccess: () => invalidateEventQueries(queryClient),
+  });
+}
+
+export function useUpdateEventMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, input }: { id: string; input: api.EventDefinitionInput }) =>
+      api.updateEvent(id, input),
+    onSuccess: () => invalidateEventQueries(queryClient),
   });
 }
 
@@ -86,9 +107,7 @@ export function useDeleteEventMutation() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => api.deleteEvent(id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: catalogKeys.events });
-    },
+    onSuccess: () => invalidateEventQueries(queryClient),
   });
 }
 

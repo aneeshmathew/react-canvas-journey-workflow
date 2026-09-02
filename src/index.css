@@ -936,28 +936,65 @@ body {
   border: 0;
 }
 
-.events-manager-form {
-  margin-bottom: 0.75rem;
-  padding-bottom: 0.75rem;
-  border-bottom: 1px solid #e2e8f0;
+.exec-modal--wide {
+  width: min(640px, 100%);
+  max-height: min(85vh, 680px);
 }
 
-.events-manager-form-row {
+.events-manager-header {
   display: flex;
-  gap: 0.4rem;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.75rem;
 }
 
-.events-manager-form-row input {
-  flex: 1;
-  padding: 0.4rem 0.55rem;
-  border: 1px solid #e2e8f0;
+.events-manager-header h2 {
+  margin: 0 0 0.35rem;
+}
+
+.events-manager-form-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.events-manager-form-actions button {
+  padding: 0.4rem 0.75rem;
   border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
   font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.events-manager-icon-btn {
+  border: none !important;
+  background: none !important;
+  font-size: 1rem;
+  padding: 0.2rem 0.4rem !important;
+}
+
+.events-manager-icon-btn:hover {
+  color: #dc2626;
+}
+
+.events-manager-save {
+  background: #2563eb !important;
+  border-color: #2563eb !important;
+  color: #fff;
+  font-weight: 600;
+}
+
+.events-manager-save:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .events-manager-add {
   flex-shrink: 0;
-  padding: 0.4rem 0.75rem;
+  padding: 0.45rem 0.85rem;
   border-radius: 6px;
   border: 1px solid #2563eb;
   background: #2563eb;
@@ -966,26 +1003,100 @@ body {
   font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
+  align-self: flex-start;
 }
 
-.events-manager-add:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.events-manager-field-label {
+  display: block;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #64748b;
+  margin: 0.75rem 0 0.25rem;
 }
 
-.events-manager-delete {
-  flex-shrink: 0;
+.exec-modal--wide input[type="text"],
+.exec-modal--wide input:not([type]),
+.exec-modal--wide input[type="number"],
+.exec-modal--wide select {
+  width: 100%;
+  padding: 0.45rem 0.6rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font: inherit;
+}
+
+.events-manager-meta {
+  display: flex;
+  gap: 1.5rem;
+  margin-top: 0.75rem;
+  padding: 0.6rem 0.75rem;
+  background: #f8fafc;
+  border-radius: 6px;
+}
+
+.events-manager-meta p {
+  margin: 0;
+  font-size: 0.82rem;
+  color: #334155;
+}
+
+.events-manager-form-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.75rem;
+}
+
+.events-manager-timeout {
+  margin-top: 1.1rem;
+  padding-top: 0.85rem;
+  border-top: 1px solid #e2e8f0;
+}
+
+.events-manager-section-title {
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.events-manager-timeout-checkbox {
+  margin: 0 0 0.5rem !important;
+}
+
+.events-manager-timeout-fields {
+  max-width: 260px;
+}
+
+.events-manager-row {
+  display: block;
+  width: 100%;
+  text-align: left;
   background: none;
   border: none;
-  color: #94a3b8;
-  font-size: 1rem;
-  line-height: 1;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
   cursor: pointer;
-  padding: 0 0.2rem;
 }
 
-.events-manager-delete:hover {
-  color: #dc2626;
+.events-manager-row:hover {
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.events-manager-type-chip {
+  flex-shrink: 0;
+  font-size: 0.62rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: #475569;
+  background: #e2e8f0;
+  border-radius: 999px;
+  padding: 0.1rem 0.5rem;
 }
 
 .events-manager-desc {
