@@ -25,11 +25,9 @@ import { TestModeModal } from "@/components/TestModeModal";
 import { Inspector } from "@/components/Inspector";
 import { InspectorLeavePrompt } from "@/components/InspectorLeavePrompt";
 import { PanelResizeHandle } from "@/components/PanelResizeHandle";
-import { AppShell } from "@/components/shell/AppShell";
 import { JourneyEditorHeader } from "@/components/shell/JourneyEditorHeader";
 import { JourneyPropertiesPanel } from "@/components/shell/JourneyPropertiesPanel";
 import { PublishHistoryModal } from "@/components/shell/PublishHistoryModal";
-import { EventsManagerModal } from "@/components/shell/EventsManagerModal";
 import {
   ActionNode,
   AudienceNode,
@@ -183,10 +181,16 @@ function ValidationStatusBanner({ v }: { v: JourneyValidationResult }) {
   );
 }
 
-function FlowCanvas() {
-  const journeyQuery = useJourneyQuery();
-  const saveMutation = useSaveJourneyMutation();
-  const publishMutation = usePublishJourneyMutation();
+function FlowCanvas({
+  journeyId,
+  onBack,
+}: {
+  journeyId: string;
+  onBack: () => void;
+}) {
+  const journeyQuery = useJourneyQuery(journeyId);
+  const saveMutation = useSaveJourneyMutation(journeyId);
+  const publishMutation = usePublishJourneyMutation(journeyId);
   const fragmentsQuery = useFragmentsQuery();
   const saveFragmentMutation = useSaveFragmentMutation();
 
@@ -194,9 +198,6 @@ function FlowCanvas() {
     screenToFlowPosition,
     setViewport: setReactFlowViewport,
     getViewport,
-    zoomIn,
-    zoomOut,
-    fitView,
   } = useReactFlow();
 
   // --- store-backed state (replaces the old useState/useNodesState cluster) ---
@@ -246,6 +247,7 @@ function FlowCanvas() {
   const [error, setError] = useState<string | null>(null);
   const [propertiesOpen, setPropertiesOpen] = useState(false);
   const [testModeOpen, setTestModeOpen] = useState(false);
+  const [publishHistoryOpen, setPublishHistoryOpen] = useState(false);
   const [copyNote, setCopyNote] = useState<string | null>(null);
   const [inspectorNavPrompt, setInspectorNavPrompt] = useState<{
     nextId: string | null;
@@ -329,14 +331,26 @@ function FlowCanvas() {
   const [dryRunError, setDryRunError] = useState<string | null>(null);
 
   // --- hydrate the store once the journey query resolves ---
+  //
+  // IMPORTANT: `useJourneyStore` is a module-level singleton — it does NOT
+  // reset when this component unmounts/remounts for a different journey.
+  // Guarding on the store's own `hydrated` boolean (as a first version of
+  // this did, back when there was only ever one journey) would mean
+  // switching from journey A to journey B silently keeps showing A's
+  // canvas, since `hydrated` is already `true` from A. Guarding on a
+  // component-local ref compared against `journeyId` instead ensures a
+  // fresh `hydrate()` call happens for every distinct journey, regardless
+  // of what the store's global `hydrated` flag currently says.
+  const hydratedJourneyIdRef = useRef<string | null>(null);
   useEffect(() => {
-    if (journeyQuery.data && !hydrated) {
+    if (journeyQuery.data && hydratedJourneyIdRef.current !== journeyId) {
       hydrate(journeyQuery.data);
+      hydratedJourneyIdRef.current = journeyId;
       if (journeyQuery.data.viewport) {
         void setReactFlowViewport(journeyQuery.data.viewport);
       }
     }
-  }, [journeyQuery.data, hydrated, hydrate, setReactFlowViewport]);
+  }, [journeyQuery.data, journeyId, hydrate, setReactFlowViewport]);
 
   const validation = useMemo(
     () => validateJourney(nodes, edges),
@@ -674,12 +688,20 @@ function FlowCanvas() {
           }
         }}
         onOpenTestMode={() => setTestModeOpen(true)}
+        onBack={onBack}
       />
       <TestModeModal
         open={testModeOpen}
         onClose={() => setTestModeOpen(false)}
+        journeyId={journeyId}
         nodes={nodes}
         edges={edges}
+      />
+      <PublishHistoryModal
+        open={publishHistoryOpen}
+        onClose={() => setPublishHistoryOpen(false)}
+        journeyId={journeyId}
+        journeyName={journeyName}
       />
       <JourneyPropertiesPanel
         open={propertiesOpen}
@@ -690,11 +712,11 @@ function FlowCanvas() {
         onClose={() => setPropertiesOpen(false)}
       />
       <div className="app-toolbar" role="toolbar" aria-label="Authoring tools">
-        <button type="button" onClick={newJourney}>
-          New
+        <button type="button" onClick={newJourney} title="Clear the canvas and start over">
+          <span aria-hidden="true">📄</span> New
         </button>
-        <label className="file-btn">
-          Import
+        <label className="file-btn" title="Import a journey JSON file">
+          <span aria-hidden="true">📥</span> Import
           <input
             type="file"
             accept="application/json,.json"
@@ -711,14 +733,14 @@ function FlowCanvas() {
               : "Fix validation issues before export"
           }
         >
-          Export
+          <span aria-hidden="true">📤</span> Export
         </button>
         <button
           type="button"
           onClick={runSimulation}
           title="Simulation: ephemeral, walks every branch automatically, nothing saved"
         >
-          Simulation
+          <span aria-hidden="true">▶</span> Simulation
         </button>
         <button
           type="button"
@@ -730,7 +752,7 @@ function FlowCanvas() {
               : "Fix validation issues first"
           }
         >
-          Dry run
+          <span aria-hidden="true">🧪</span> Dry run
         </button>
         <button
           type="button"
@@ -742,7 +764,15 @@ function FlowCanvas() {
               : "Fix validation issues first"
           }
         >
+          <span aria-hidden="true">🚀</span>{" "}
           {publishMutation.isPending ? "Publishing…" : "Publish"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setPublishHistoryOpen(true)}
+          title="View this journey's publish history"
+        >
+          <span aria-hidden="true">🕘</span> History
         </button>
         <div className="toolbar-history" role="group" aria-label="Undo / redo">
           <button
@@ -789,32 +819,6 @@ function FlowCanvas() {
             aria-label="Save as Fragment"
           >
             🧩 Save as Fragment
-          </button>
-        </div>
-        <div className="toolbar-zoom" role="group" aria-label="Canvas zoom">
-          <button
-            type="button"
-            onClick={() => zoomOut({ duration: 200 })}
-            title="Zoom out"
-            aria-label="Zoom out canvas"
-          >
-            −
-          </button>
-          <button
-            type="button"
-            onClick={() => void fitView({ padding: 0.2, duration: 200 })}
-            title="Zoom to fit journey in view"
-            aria-label="Zoom to fit journey in view"
-          >
-            Zoom
-          </button>
-          <button
-            type="button"
-            onClick={() => zoomIn({ duration: 200 })}
-            title="Zoom in"
-            aria-label="Zoom in canvas"
-          >
-            +
           </button>
         </div>
       </div>
@@ -904,6 +908,7 @@ function FlowCanvas() {
             nodeTypes={nodeTypes}
             onSelectionChange={onSelectionChange}
             fitView
+            fitViewOptions={{ padding: 0.3, maxZoom: 1 }}
             minZoom={0.08}
             maxZoom={2.5}
             connectionLineType={ConnectionLineType.Bezier}
@@ -946,25 +951,16 @@ function FlowCanvas() {
   );
 }
 
-export function JourneyBuilder() {
-  const [journeysModalOpen, setJourneysModalOpen] = useState(false);
-  const [eventsModalOpen, setEventsModalOpen] = useState(false);
+export function JourneyBuilder({
+  journeyId,
+  onBack,
+}: {
+  journeyId: string;
+  onBack: () => void;
+}) {
   return (
     <ReactFlowProvider>
-      <AppShell
-        onJourneysClick={() => setJourneysModalOpen(true)}
-        onEventsClick={() => setEventsModalOpen(true)}
-      >
-        <FlowCanvas />
-      </AppShell>
-      <PublishHistoryModal
-        open={journeysModalOpen}
-        onClose={() => setJourneysModalOpen(false)}
-      />
-      <EventsManagerModal
-        open={eventsModalOpen}
-        onClose={() => setEventsModalOpen(false)}
-      />
+      <FlowCanvas journeyId={journeyId} onBack={onBack} />
     </ReactFlowProvider>
   );
 }

@@ -1,8 +1,8 @@
 # Journey Flow
 
-A **customer-journey builder** web app: drag activities from a categorized palette onto a canvas, connect them, edit properties, validate the graph, simulate and test paths, and publish a compiled bundle. The UI is built with **React** and **React Flow** (`@xyflow/react`), with **Zustand** for canvas state, **TanStack Query** over a mock API layer for async data, and **Tailwind CSS** for new UI. Authoring happens entirely in this app; **n8n** is a **planned runtime target** via a compiler (see [n8n in this project](#n8n-in-this-project)).
+A **multi-journey builder** web app: manage journeys from a landing page (create/edit/delete), then on any journey — drag activities from a categorized palette onto a canvas, connect them, edit properties, validate the graph, simulate and test paths, and publish a compiled bundle. Events (and other catalog data) get their own landing page too. The UI is built with **React** and **React Flow** (`@xyflow/react`), with **Zustand** for canvas state, **TanStack Query** over a mock API layer for async data, and **Tailwind CSS** for new UI. Authoring happens entirely in this app; **n8n** is a **planned runtime target** via a compiler (see [n8n in this project](#n8n-in-this-project)).
 
-> **Status: all phases (0–5) and the initial backlog are implemented.** See [Roadmap / what's built](#roadmap--whats-built) for what shipped in each phase, [Gap analysis](#gap-analysis-known-limitations) for what's still simplified or missing, and [Non-goals](#non-goals) for what's intentionally out of scope. Read those sections before making changes so new work lands in the right place and doesn't quietly re-simplify something that was a deliberate call.
+> **Status: all phases (0–5), the initial backlog, and a follow-up multi-journey/UI pass are implemented.** See [Roadmap / what's built](#roadmap--whats-built) for what shipped in each phase, [Gap analysis](#gap-analysis-known-limitations) for what's still simplified or missing, and [Non-goals](#non-goals) for what's intentionally out of scope. Read those sections before making changes so new work lands in the right place and doesn't quietly re-simplify something that was a deliberate call.
 
 ---
 
@@ -43,11 +43,11 @@ npm run test    # Vitest (add -- --watch for watch mode)
 ```
 src/
 ├── main.tsx                        # React root; QueryClientProvider
-├── App.tsx                         # Renders JourneyBuilder
+├── App.tsx                         # Owns top-level navigation: Journeys list / Events list / editor, one shared AppShell
 ├── JourneyBuilder.tsx              # Header, toolbar, FlowCanvas: palette | canvas | inspector, all wiring
 ├── index.css                       # Legacy hand-written styles (coexists with Tailwind)
 ├── store/
-│   └── journeyStore.ts             # Zustand: nodes/edges/meta/selection/undo-redo/clipboard
+│   └── journeyStore.ts             # Zustand: nodes/edges/meta/selection/undo-redo/clipboard (one journey's canvas at a time)
 ├── hooks/
 │   ├── useNodeValidation.ts        # Per-node messages from context (node outline ok/error)
 │   └── queries/
@@ -56,11 +56,14 @@ src/
 │   └── JourneyValidationContext.tsx # Shares validation result with node components
 ├── components/
 │   ├── shell/
-│   │   ├── AppShell.tsx            # Left nav rail + content area
-│   │   ├── JourneyEditorHeader.tsx # Name, status, Alerts, Test mode, Delete, properties toggle
+│   │   ├── AppShell.tsx            # Left nav rail (Journeys / Events) + content area, shared by every view
+│   │   ├── JourneyEditorHeader.tsx # Back-to-Journeys, name, status, Alerts, Test mode, Delete, properties toggle
 │   │   ├── JourneyPropertiesPanel.tsx # Name + description panel
-│   │   ├── PublishHistoryModal.tsx # Publish history (opened from the nav rail)
-│   │   └── EventsManagerModal.tsx  # Create/delete named events (opened from the nav rail)
+│   │   └── PublishHistoryModal.tsx # Publish history for the journey currently open in the editor
+│   ├── journeys/
+│   │   └── JourneysListPage.tsx    # Landing page: data grid of every journey, create/edit/delete
+│   ├── events/
+│   │   └── EventsListPage.tsx      # Events landing page: list first, then create/edit/delete
 │   ├── palette/
 │   │   └── Palette.tsx             # Accordion: Events / Orchestration / Actions / Fragments + search
 │   ├── nodes/
@@ -80,22 +83,24 @@ src/
     ├── adapters/n8n.ts             # Journey → n8n workflow JSON compiler
     ├── storage.ts                  # localStorage read/write, file import/export helpers
     ├── panelWidths.ts              # Resizable panel widths persisted locally
-    └── api/mockApi.ts              # Mock backend: journey CRUD, catalogs, test profiles/runs, fragments, publish history
+    └── api/mockApi.ts              # Mock backend: multi-journey CRUD, catalogs, test profiles/runs, fragments, publish history
 ```
 
 ---
 
 ## Main components (roles)
 
-- **`JourneyBuilder`** — Wraps the app in `ReactFlowProvider` and `AppShell`. Hosts `JourneyEditorHeader`, `JourneyPropertiesPanel`, the secondary authoring toolbar (New/Import/Export/Simulation/Dry run/Publish/Undo/Redo/Copy/Paste/Save as Fragment/Zoom), and **`FlowCanvas`**, which owns all canvas rendering and wires the Zustand store to React Flow.
-- **`journeyStore`** (Zustand) — `nodes`, `edges`, journey name/description, viewport, selection, panel widths, undo/redo history, and the copy/paste clipboard. Structural edits (add/delete/connect, Inspector save) each commit one undo step.
+- **`App`** — Owns which top-level view is showing (`journeys` | `events` | `editor`), all inside one shared `AppShell` so the nav rail's active state stays consistent. This is the app's only "router" — there's no URL-based routing library; view state is plain React state.
+- **`JourneysListPage`** — The landing page: a data grid of every journey (name, last updated, node/edge counts) with Create/Edit/Delete. Opening or creating a journey hands its id to `JourneyBuilder`.
+- **`EventsListPage`** — Same list-first pattern as Journeys: a data grid of events, "+ New event," and click-a-row-to-edit. Not a modal — a full page, consistent with Journeys.
+- **`JourneyBuilder`** — Wraps one journey's editor in `ReactFlowProvider`, given a `journeyId` and an `onBack` callback. Hosts `JourneyEditorHeader`, `JourneyPropertiesPanel`, the secondary authoring toolbar (New/Import/Export/Simulation/Dry run/Publish/History/Undo/Redo/Copy/Paste/Save as Fragment), and **`FlowCanvas`**, which owns all canvas rendering and wires the Zustand store to React Flow for that specific journey.
+- **`journeyStore`** (Zustand) — `nodes`, `edges`, journey name/description, viewport, selection, panel widths, undo/redo history, and the copy/paste clipboard, for **one journey's canvas at a time**. It's a module-level singleton, so switching journeys re-hydrates it explicitly (guarded by a `journeyId`-keyed ref in `JourneyBuilder`, not the store's own `hydrated` flag) rather than assuming a fresh store per journey.
 - **`Palette`** — Four accordion groups (Events, Orchestration, Actions, Fragments) plus a pinned structural "End" item, with a search filter across all of them. Drags use `dataTransfer` with either `application/reactflow` (a single node type) or a dedicated Fragment mime type (a whole saved subgraph). Drops are handled on the React Flow pane (`onDrop`/`onDragOver`).
 - **Custom nodes** (`journeyNodes.tsx`) — `EntryNode` (all 4 entry-point kinds), `AudienceNode`, `EventNode`, `EventReactionNode`, `ConditionNode` (dynamic per-branch handles), `WaitNode`, `ActionNode` (all 8 channel kinds), `EndNode`. Each uses **`useNodeValidation`** for valid/invalid styling.
 - **`Inspector`** — Edits `data` for the selected node with per-type fields (audience/event catalogs, channel-specific content field, Condition branch editor, Wait duration, Reaction-event kind), plus the shared error/timeout-fallback checkbox.
 - **`ExecutionDryRunModal`** — Multi-path animated preview with a path-tab selector, used by both the Simulation banner data and the Dry run modal.
-- **`TestModeModal`** — Named, persistent test profiles walked through the journey one branch decision at a time; completed runs are saved and shown again next time that profile is tested.
-- **`PublishHistoryModal`** — A history of past publishes of the one journey this app edits (see [Gap analysis](#gap-analysis-known-limitations) on why this isn't a full multi-journey list).
-- **`EventsManagerModal`** — Create, edit, and delete named events (Label, Description, Type, Event id type, Timeout); a real, persisted catalog (unlike Audiences/Templates, still static) that immediately feeds the `<datalist>` suggestions in any event-based node's Inspector field.
+- **`TestModeModal`** — Named, persistent test profiles walked through the journey one branch decision at a time, scoped to the journey currently open; completed runs are saved and shown again next time that profile is tested against that journey.
+- **`PublishHistoryModal`** — A history of past publishes of the journey currently open in the editor, opened from the toolbar's "History" button.
 
 ---
 
@@ -117,7 +122,7 @@ The canvas (via the store) is the source of truth while editing; `toDocument()` 
 
 ## Execution flow (behavior)
 
-1. **Authoring** — Add nodes via palette drag (single node type or a whole Journey Fragment) or copy/paste (`Ctrl/Cmd+C/V`), connect edges (`onConnect`, `onReconnect`), pan/zoom. Changes autosave (debounced, via a TanStack Query mutation) and commit undo history at each structural edit.
+1. **Authoring** — From the Journeys landing page, create a new journey or open an existing one (its id is threaded into `JourneyBuilder`/the store). Add nodes via palette drag (single node type or a whole Journey Fragment) or copy/paste (`Ctrl/Cmd+C/V`), connect edges (`onConnect`, `onReconnect`), pan/zoom. Changes autosave (debounced, via a TanStack Query mutation scoped to that journey's id) and commit undo history at each structural edit.
 2. **`validateJourney`** (`lib/journeyValidation.ts`) enforces:
    - Exactly one **entry-point** node, with **no incoming edges**
    - Exactly one **End** node
@@ -131,10 +136,10 @@ The canvas (via the store) is the source of truth while editing; `toDocument()` 
 4. **Three testing modes**:
    - **Simulation** — the inline banner version of the above: ephemeral, every branch, nothing saved.
    - **Dry run** — the same walk in `ExecutionDryRunModal` with an animated, tabbed multi-path preview; framed as "production-shaped data, no real sends."
-   - **Test mode** — a named, persistent profile walked one step at a time in `TestModeModal`; a person picks the branch by hand at each Condition (there's no rule-expression engine behind branch names), and the completed run is saved for that profile.
+   - **Test mode** — a named, persistent profile walked one step at a time in `TestModeModal`, scoped to the journey currently open; a person picks the branch by hand at each Condition (there's no rule-expression engine behind branch names), and the completed run is saved for that profile against that journey.
 5. **Export** — Downloads journey JSON (`serializeJourney`), gated on full validity.
-6. **Publish** — Compiles the journey to an n8n workflow shape (`lib/adapters/n8n.ts`) and downloads a bundle containing the journey, the compiled workflow, and a list of compiler caveats; also records a lightweight entry in publish history.
-7. **Autosave** — Debounced, via `useSaveJourneyMutation`, persisted to `localStorage` under `journey-builder:last` under the hood.
+6. **Publish** — Compiles the journey to an n8n workflow shape (`lib/adapters/n8n.ts`) and downloads a bundle containing the journey, the compiled workflow, and a list of compiler caveats; also records a lightweight entry in that journey's publish history (viewable via the toolbar's "History" button).
+7. **Autosave** — Debounced, via `useSaveJourneyMutation(journeyId)`, persisted to `localStorage` under that journey's own key (see [Local storage keys](#local-storage-keys)) and reflected back into the Journeys landing page's list (name/updated-at/counts).
 
 ---
 
@@ -154,12 +159,14 @@ So: **authoring** = this UI; **running in production** = envisioned as importing
 
 | Key | Purpose |
 |-----|--------|
-| `journey-builder:last` | Last autosaved journey JSON |
+| `journey-builder:journeys-index` | Lightweight summary list (name/updatedAt/counts) for the Journeys landing page's data grid |
+| `journey-builder:journey:<id>` | One key per journey, holding its full document |
+| `journey-builder:last` | Legacy single-journey key — no longer written by new code, but read once (and migrated into the index above) if `journeys-index` doesn't exist yet, so upgrading doesn't silently lose whatever was being worked on |
 | `journey-builder:palette-width` | Palette panel width |
 | `journey-builder:inspector-width` | Properties panel width |
-| `journey-builder:test-runs` | Saved Test mode runs, per profile |
+| `journey-builder:test-runs` | Saved Test mode runs, keyed by journey id + profile |
 | `journey-builder:fragments` | Saved Journey Fragments |
-| `journey-builder:publish-history` | Publish history records |
+| `journey-builder:publish-history` | Publish history records, each tagged with the journey id it belongs to |
 | `journey-builder:events` | User-created events catalog |
 
 ---
@@ -192,9 +199,9 @@ Read Audience sits under **Orchestration** rather than Events: a scheduled/batch
 
 ### Layout
 
-- **Left nav rail** (`AppShell`) — two destinations: "Journeys" (publish history) and "Events" (the events catalog manager). This app builds journeys and manages the catalog data they reference, and nothing else, so there's no reason to build out placeholder nav sections for capabilities that don't exist yet.
-- **Journey editor header** (`JourneyEditorHeader`) — name, Draft/Version/saved status, Alerts (wired to real validation output), Test mode, Delete, and a properties-panel toggle. "Manage access" is an intentionally disabled stub — there's no multi-user/permissions model in this authoring tool.
-- **Secondary toolbar** — the authoring conveniences that aren't part of the header concept above: Import/Export, Simulation/Dry run/Publish, Undo/Redo, Copy/Paste/Save as Fragment, Zoom.
+- **Left nav rail** (`AppShell`) — two destinations, both real landing pages: "Journeys" (a data grid of every journey — see `JourneysListPage`) and "Events" (a list-then-create/edit/delete catalog page — see `EventsListPage`). This app builds journeys and manages the catalog data they reference, and nothing else, so there's no reason to build out placeholder nav sections for capabilities that don't exist yet.
+- **Journey editor header** (`JourneyEditorHeader`) — a working Back button (returns to the Journeys landing page), name, Draft/Version/saved status, Alerts (wired to real validation output), Test mode, Delete, and a properties-panel toggle. "Manage access" is an intentionally disabled stub — there's no multi-user/permissions model in this authoring tool.
+- **Secondary toolbar** — the authoring conveniences that aren't part of the header concept above: New/Import/Export, Simulation/Dry run/Publish/History, Undo/Redo, Copy/Paste/Save as Fragment. Every button pairs an icon with its label. No dedicated zoom controls here — React Flow's own `<Controls>` (bottom-left of the canvas) already covers zoom in/out/fit-view, so a second zoom control in the toolbar was redundant.
 
 ---
 
@@ -219,7 +226,7 @@ Honest status of every area this app's design touches, so nothing reads as more 
 | State management | Zustand store with undo/redo, copy/paste clipboard | Undo/redo covers structural edits and Inspector save/close, not every keystroke while a field is focused |
 | Async data | TanStack Query + mock API layer throughout | Backed by `localStorage`, not a real backend |
 | Styling system | Tailwind used for all newer components | Coexists with the original hand-written CSS for older ones rather than having fully replaced it |
-| Multi-journey support | — | This app edits one journey at a time; "Journeys" in the nav opens publish history, not a journey list — see Non-goals |
+| Multi-journey support | ✅ Real: a data grid (`JourneysListPage`) lists every journey, each with its own full document under its own `localStorage` key; create/edit/delete all work | No search/filter/sort/pagination on the grid yet; no folders or tags |
 
 ---
 
@@ -253,6 +260,8 @@ Replaced the Phase 0 n8n stub (which always emitted empty `nodes`/`connections`)
 
 Scope correction, stated directly: the original plan called for "a minimal journey list." This app remained single-journey — giving it real multi-journey CRUD would mean threading a journey id through the store, the query hooks, and the editor that the previous four phases were built around, a materially bigger change than a Phase 5 add-on. What shipped instead is a **publish history** view (structural facts — node/edge counts, compiler-warning count — not fabricated business metrics), labeled as exactly that rather than implying multi-journey support that doesn't exist. A reporting placeholder was considered and deliberately not built, for the same reason: inventing numbers like "1,234 emails sent" would look like real functionality with nothing behind it.
 
+**Superseded below** — real multi-journey CRUD was explicitly requested afterward and built; see "Post-request: multi-journey support, Events landing page, and UI polish."
+
 ### Backlog — all three items addressed
 - **Journey Fragments** — a reusable node/edge library. "Save as Fragment" extracts the current canvas selection (`lib/cloneGraph.ts`), persists it via the mock API, and a Fragments palette group lists them for drag-and-drop insertion (fresh ids, dropped near the cursor). Entry-point nodes are excluded from extraction, since duplicating one would immediately break the single-entry-point rule.
 - **Node copy/paste** — `Ctrl/Cmd+C/V` plus toolbar buttons, built on the same subgraph-cloning helper as Journey Fragments so both features share one tested implementation rather than two.
@@ -270,6 +279,15 @@ Known limitations, stated directly:
 
 Audiences and Message templates could follow the same real-catalog-with-edit pattern later; scoped to Events only since that's what was asked for.
 
+### Post-request: multi-journey support, Events landing page, and UI polish
+
+Four changes requested together, addressed as one pass since they touch the same navigation/layout surface:
+
+1. **Real multi-journey CRUD.** This reverses the Phase 5 scope correction above — that decision was right for what was known at the time, and this supersedes it now that it was explicitly requested. `mockApi.ts` moved from one document under a fixed key to a real collection: each journey's full document lives under its own key (`journey-builder:journey:<id>`), plus a lightweight index (`journey-builder:journeys-index`) for the list page so it doesn't have to load every document just to show a grid. **`JourneysListPage`** is the new landing page (data grid: name, last updated, node/edge counts, Edit/Delete). A **migration** runs once on first read: if the old single-journey key has data but the new index doesn't exist yet, that journey is adopted as the first entry rather than silently discarded — covered by dedicated tests, including one confirming it doesn't run twice and duplicate the journey. Test mode runs and publish history are now genuinely scoped per journey id (they always accepted a journey-key parameter; it was previously a hardcoded constant standing in for "the one journey," now it's a real id).
+2. **Events also became a landing page, not a modal** (`EventsListPage`), for the same list-first-then-create/edit/delete pattern as Journeys — consistent navigation model across both catalog types. `AppShell` now owns navigation between three views (Journeys list / Events list / one journey's editor) as plain React state in `App.tsx`, not a router library; the old `EventsManagerModal` was removed.
+3. **Toolbar buttons got icons + labels**, and the **separate zoom control was removed** from the toolbar — React Flow's own `<Controls>` (bottom-left of the canvas) already provides zoom in/out/fit-view, so a second one in the toolbar was redundant, not an intentional two-tier zoom design.
+4. **Canvas nodes were rendering oversized.** The actual CSS-defined node size (`.journey-node`, ~120px wide) wasn't the problem; `fitView`'s default behavior zooms in as far as `maxZoom` allows to fill the viewport, and with only one or two small nodes on an empty canvas it was zooming in close to the 2.5x ceiling — a real node rendering ~300px on screen. Fixed by capping the *initial fit's* zoom specifically (`fitViewOptions={{ maxZoom: 1 }}`) rather than lowering the canvas's overall `maxZoom`, which would have made intentional zooming-in less useful. Node CSS was also trimmed modestly (smaller padding/font) for a denser look independent of the zoom fix.
+
 ---
 
 ## Non-goals
@@ -278,7 +296,6 @@ Audiences and Message templates could follow the same real-catalog-with-edit pat
 - Real message delivery (email/SMS/push sending) — out of scope entirely
 - Full reporting/analytics — no mock numbers are fabricated; the publish-history view shows structural facts only
 - Multi-user collaboration/permissions
-- Real multi-journey CRUD — a single journey is edited at a time (see Phase 5's publish-history scope correction); the underlying architectural change (journey ids threaded through the store/queries/editor) is real work, not a small add-on, and is intentionally not scheduled
 
 ---
 

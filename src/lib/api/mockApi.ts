@@ -1,26 +1,22 @@
 /**
- * Mock API layer (Phase 0).
+ * Mock API layer.
  *
  * This module stands in for a real backend so the rest of the app can start
  * consuming data through TanStack Query hooks (see `@/hooks/queries`) instead
- * of calling `localStorage` directly. `fetchJourney` / `saveJourney` are
- * backed by `localStorage` under the hood today — swapping them for real
- * `fetch()` calls later should not require touching any component, only this
- * file and the query hooks that wrap it.
- *
- * `fetchAudiences` / `fetchEvents` / `fetchMessageTemplates` model the
- * catalogs a real backend would expose (Audiences, Events, Message templates). They're
- * static in-memory lists for now — Phase 3 is expected to wire real
- * selections from these catalogs into the Inspector per node type.
+ * of calling `localStorage` directly. Journeys, Events, Test runs, Fragments,
+ * and Publish history are all backed by `localStorage` under the hood today
+ * — swapping them for real `fetch()` calls later should not require touching
+ * any component, only this file and the query hooks that wrap it.
  */
 import {
   defaultJourney,
   parseJourney,
+  serializeJourney,
   type JourneyDocument,
   type JourneyNodeData,
 } from "@/lib/journeySchema";
 import type { PublishBundle } from "@/lib/publishBundle";
-import { loadFromLocalStorage, saveToLocalStorage } from "@/lib/storage";
+import { loadFromLocalStorage } from "@/lib/storage";
 import type { Edge, Node } from "@xyflow/react";
 
 /** Simulated network latency so loading states are real and visible in dev. */
@@ -30,26 +26,142 @@ function delay<T>(value: T, ms: number): Promise<T> {
   });
 }
 
-export async function fetchJourney(): Promise<JourneyDocument> {
-  let doc: JourneyDocument;
+// --- Journeys: a real, multi-journey collection ---------------------------
+//
+// Each journey's full document lives under its own `localStorage` key
+// (`journeyDocKey(id)`); a lightweight index (`JOURNEYS_INDEX_KEY`) holds
+// just the summary fields a list page needs, so listing journeys doesn't
+// require loading every document. This replaced the original single-journey
+// model (one document under a fixed key) once real multi-journey CRUD was
+// requested — see README → Journeys landing page.
+
+export type JourneySummary = {
+  id: string;
+  name: string;
+  description?: string;
+  updatedAt: string;
+  nodeCount: number;
+  edgeCount: number;
+};
+
+const JOURNEYS_INDEX_KEY = "journey-builder:journeys-index";
+
+function journeyDocKey(id: string): string {
+  return `journey-builder:journey:${id}`;
+}
+
+function loadIndex(): JourneySummary[] {
   try {
-    const raw = loadFromLocalStorage();
-    doc = raw ? parseJourney(JSON.parse(raw)) : defaultJourney();
+    const raw = localStorage.getItem(JOURNEYS_INDEX_KEY);
+    return raw ? (JSON.parse(raw) as JourneySummary[]) : [];
   } catch {
-    doc = defaultJourney();
+    return [];
   }
-  return delay(doc, 200);
+}
+
+function saveIndex(list: JourneySummary[]): void {
+  try {
+    localStorage.setItem(JOURNEYS_INDEX_KEY, JSON.stringify(list));
+  } catch {
+    /* quota or private mode */
+  }
+}
+
+function summarize(id: string, doc: JourneyDocument): JourneySummary {
+  return {
+    id,
+    name: doc.meta?.name ?? "Untitled journey",
+    description: doc.meta?.description,
+    updatedAt: doc.meta?.updatedAt ?? new Date().toISOString(),
+    nodeCount: doc.nodes.length,
+    edgeCount: doc.edges.length,
+  };
+}
+
+/**
+ * One-time migration: if the index has never been written but the old
+ * single-journey key has data, adopt it as the first journey instead of
+ * silently losing whatever was being worked on. Safe to call repeatedly —
+ * it only acts when the index key is completely absent (not just empty),
+ * so deleting the last journey doesn't re-trigger it.
+ */
+function migrateLegacySingleJourneyIfNeeded(): void {
+  try {
+    if (localStorage.getItem(JOURNEYS_INDEX_KEY) !== null) return;
+    const legacyRaw = loadFromLocalStorage();
+    if (!legacyRaw) {
+      saveIndex([]);
+      return;
+    }
+    const doc = parseJourney(JSON.parse(legacyRaw));
+    const id = crypto.randomUUID();
+    localStorage.setItem(journeyDocKey(id), serializeJourney(doc));
+    saveIndex([summarize(id, doc)]);
+  } catch {
+    saveIndex([]);
+  }
+}
+
+export async function listJourneys(): Promise<JourneySummary[]> {
+  migrateLegacySingleJourneyIfNeeded();
+  return delay(
+    loadIndex().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    150,
+  );
+}
+
+export async function fetchJourney(id: string): Promise<JourneyDocument> {
+  try {
+    const raw = localStorage.getItem(journeyDocKey(id));
+    if (raw) return delay(parseJourney(JSON.parse(raw)), 200);
+  } catch {
+    /* fall through to a default so a bad id doesn't crash the editor */
+  }
+  return delay(defaultJourney(), 200);
+}
+
+export async function createJourney(
+  name = "Untitled journey",
+): Promise<JourneySummary> {
+  migrateLegacySingleJourneyIfNeeded();
+  const doc = defaultJourney();
+  doc.meta = { ...doc.meta, name };
+  const id = crypto.randomUUID();
+  localStorage.setItem(journeyDocKey(id), serializeJourney(doc));
+  const summary = summarize(id, doc);
+  saveIndex([summary, ...loadIndex()]);
+  return delay(summary, 150);
 }
 
 export async function saveJourney(
+  id: string,
   doc: JourneyDocument,
 ): Promise<JourneyDocument> {
   const stamped: JourneyDocument = {
     ...doc,
     meta: { ...doc.meta, updatedAt: new Date().toISOString() },
   };
-  saveToLocalStorage(stamped);
+  localStorage.setItem(journeyDocKey(id), serializeJourney(stamped));
+  const index = loadIndex();
+  const i = index.findIndex((j) => j.id === id);
+  const summary = summarize(id, stamped);
+  if (i === -1) {
+    index.unshift(summary);
+  } else {
+    index[i] = summary;
+  }
+  saveIndex(index);
   return delay(stamped, 150);
+}
+
+export async function deleteJourney(id: string): Promise<void> {
+  saveIndex(loadIndex().filter((j) => j.id !== id));
+  try {
+    localStorage.removeItem(journeyDocKey(id));
+  } catch {
+    /* ignore */
+  }
+  return delay(undefined, 150);
 }
 
 export type PublishResult = {
@@ -61,6 +173,7 @@ const PUBLISH_HISTORY_KEY = "journey-builder:publish-history";
 
 export type PublishRecord = {
   id: string;
+  journeyId: string;
   journeyName: string;
   publishedAt: string;
   nodeCount: number;
@@ -88,33 +201,34 @@ function savePublishHistory(records: PublishRecord[]): void {
 /**
  * Stand-in for a real publish endpoint. Today this just timestamps the
  * bundle that `lib/publishBundle.ts` already builds, and records a
- * lightweight structural summary to `localStorage` so the app has
- * somewhere to show "publish history" (see `listPublishHistory` and
- * `AppShell`'s Journeys nav) — a real backend call slots in here without
- * touching the UI layer.
- *
- * Scope note: this app remains single-journey (see README → Non-goals), so
- * "publish history" is a list of past publishes of *the one journey being
- * edited*, not a multi-journey list. A real journey list is a larger,
- * deliberately deferred architectural change — see README → Phase 5.
+ * lightweight structural summary to `localStorage`, scoped to the journey
+ * that was published — a real backend call slots in here without touching
+ * the UI layer.
  */
 export async function publishJourney(
+  journeyId: string,
   bundle: PublishBundle,
 ): Promise<PublishResult> {
   const record: PublishRecord = {
     id: crypto.randomUUID(),
+    journeyId,
     journeyName: bundle.journey.meta?.name ?? "Untitled journey",
     publishedAt: new Date().toISOString(),
     nodeCount: bundle.journey.nodes.length,
     edgeCount: bundle.journey.edges.length,
     compilerWarningCount: bundle.compilerWarnings.length,
   };
-  savePublishHistory([record, ...loadPublishHistory()].slice(0, 50));
+  savePublishHistory([record, ...loadPublishHistory()].slice(0, 200));
   return delay({ publishedAt: record.publishedAt, bundle }, 300);
 }
 
-export async function listPublishHistory(): Promise<PublishRecord[]> {
-  return delay(loadPublishHistory(), 100);
+export async function listPublishHistory(
+  journeyId: string,
+): Promise<PublishRecord[]> {
+  return delay(
+    loadPublishHistory().filter((r) => r.journeyId === journeyId),
+    100,
+  );
 }
 
 export type CatalogItem = {
@@ -147,7 +261,7 @@ export async function fetchMessageTemplates(): Promise<CatalogItem[]> {
 // --- Events catalog: persisted and user-editable --------------------------
 //
 // Unlike Audiences/Templates (still a static mock list), Events are a real,
-// user-managed catalog — see the "Events" nav item / `EventsManagerModal`.
+// user-managed catalog — see the "Events" nav item / `EventsListPage`.
 // Creating an event here immediately shows up as a `<datalist>` suggestion
 // in the Inspector's event-key field for any event-based node. Audiences
 // and Templates could follow the same pattern later; scoped to Events only
@@ -360,7 +474,6 @@ export type TestRun = {
 };
 
 const TEST_RUNS_KEY = "journey-builder:test-runs";
-export const CURRENT_JOURNEY_KEY = "current";
 
 function loadAllTestRuns(): TestRun[] {
   try {

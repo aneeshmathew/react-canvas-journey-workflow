@@ -3,7 +3,6 @@ import type { Edge, Node } from "@xyflow/react";
 import type { JourneyNodeData } from "@/lib/journeySchema";
 import { findSingleEntryNode, getWalkOptions } from "@/lib/testModeWalk";
 import type { TestRunStep } from "@/lib/api/mockApi";
-import { CURRENT_JOURNEY_KEY } from "@/lib/api/mockApi";
 import {
   useSaveTestRunMutation,
   useTestProfilesQuery,
@@ -13,6 +12,7 @@ import {
 type Props = {
   open: boolean;
   onClose: () => void;
+  journeyId: string;
   nodes: Node<JourneyNodeData>[];
   edges: Edge[];
 };
@@ -36,13 +36,13 @@ function nodeStep(n: Node<JourneyNodeData>): TestRunStep {
  * automatically — a person clicks through it, one branch at a time, and
  * that choice is what gets persisted via `saveTestRun`.
  */
-export function TestModeModal({ open, onClose, nodes, edges }: Props) {
+export function TestModeModal({ open, onClose, journeyId, nodes, edges }: Props) {
   const [profileId, setProfileId] = useState<string | null>(null);
   const [walk, setWalk] = useState<WalkState | null>(null);
   const [savedFlash, setSavedFlash] = useState(false);
 
   const profilesQuery = useTestProfilesQuery();
-  const runsQuery = useTestRunsQuery(profileId);
+  const runsQuery = useTestRunsQuery(journeyId, profileId);
   const saveRunMutation = useSaveTestRunMutation();
 
   useEffect(() => {
@@ -84,7 +84,7 @@ export function TestModeModal({ open, onClose, nodes, edges }: Props) {
     if (!walk || !profileId) return;
     saveRunMutation.mutate(
       {
-        journeyKey: CURRENT_JOURNEY_KEY,
+        journeyKey: journeyId,
         profileId,
         steps: walk.steps,
         reachedEnd: atEnd,

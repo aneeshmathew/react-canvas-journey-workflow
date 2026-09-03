@@ -3,25 +3,24 @@ import { usePublishHistoryQuery } from "@/hooks/queries/useJourneyQueries";
 type Props = {
   open: boolean;
   onClose: () => void;
+  journeyId: string;
+  journeyName: string;
 };
 
 /**
- * The Phase 5 roadmap called for "a minimal journey list so publish has
- * somewhere to go besides a JSON download." This app is still
- * single-journey (see README → Non-goals) — building real multi-journey
- * CRUD would mean threading a journey id through the store, queries, and
- * `JourneyBuilder` that Phases 0-4 were built around, which is a bigger,
- * deliberately deferred architectural change, not a Phase 5 add-on.
- *
- * What's genuinely buildable within that constraint: a history of past
- * publishes of *this* journey, each with a structural summary (node/edge
- * counts, compiler warning count) and a re-download link for that bundle's
- * JSON. That's what this shows — it's honestly a "publish history" list,
- * not a "journey list", and is labeled that way rather than implying
- * multi-journey support that doesn't exist.
+ * A history of past publishes of *this* journey — node/edge counts and
+ * compiler-warning counts, not fabricated delivery/reporting numbers (see
+ * README → Non-goals on reporting). Opened from the "Publish" area of the
+ * editor. Now that Journeys has a real landing page, this is purely a
+ * per-journey publish log, not a stand-in for a journey list.
  */
-export function PublishHistoryModal({ open, onClose }: Props) {
-  const historyQuery = usePublishHistoryQuery();
+export function PublishHistoryModal({
+  open,
+  onClose,
+  journeyId,
+  journeyName,
+}: Props) {
+  const historyQuery = usePublishHistoryQuery(journeyId);
 
   if (!open) return null;
 
@@ -34,18 +33,17 @@ export function PublishHistoryModal({ open, onClose }: Props) {
         aria-labelledby="publish-history-title"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 id="publish-history-title">Journeys</h2>
+        <h2 id="publish-history-title">Publish history: {journeyName}</h2>
         <p className="exec-modal-note">
-          This app edits a single journey (see the README's Non-goals), so this is
-          a history of past publishes of that journey, not a multi-journey list.
-          Each row is a structural snapshot — no real delivery/reporting data
-          exists (see README → Non-goals on reporting).
+          Each row is a structural snapshot from a past publish — no real
+          delivery/reporting data exists (see README → Non-goals on
+          reporting).
         </p>
         {historyQuery.isPending ? <p>Loading publish history…</p> : null}
         {historyQuery.data && historyQuery.data.length === 0 ? (
           <p className="test-mode-history-empty">
-            Nothing published yet — use the Publish button once your journey is
-            valid.
+            Nothing published yet — use the Publish button once this journey
+            is valid.
           </p>
         ) : null}
         {historyQuery.data && historyQuery.data.length > 0 ? (

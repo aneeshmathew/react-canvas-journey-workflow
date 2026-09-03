@@ -5,7 +5,8 @@ import type { PublishBundle } from "@/lib/publishBundle";
 
 export const journeyKeys = {
   all: ["journey"] as const,
-  current: () => [...journeyKeys.all, "current"] as const,
+  list: () => [...journeyKeys.all, "list"] as const,
+  detail: (id: string) => [...journeyKeys.all, "detail", id] as const,
 };
 
 export const catalogKeys = {
@@ -15,16 +16,44 @@ export const catalogKeys = {
   templates: ["catalog", "templates"] as const,
 };
 
+/** The Journeys landing page's data grid. */
+export function useJourneysListQuery() {
+  return useQuery({
+    queryKey: journeyKeys.list(),
+    queryFn: api.listJourneys,
+  });
+}
+
+export function useCreateJourneyMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name?: string) => api.createJourney(name),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: journeyKeys.list() });
+    },
+  });
+}
+
+export function useDeleteJourneyMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteJourney(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: journeyKeys.list() });
+    },
+  });
+}
+
 /**
- * Loads the authoring journey. Replaces the old synchronous
+ * Loads one journey for the editor. Replaces the old synchronous
  * `loadStoredJourneyOrDefault()` call with a proper async query — same
  * underlying storage for now (see `lib/api/mockApi.ts`), but callers get a
  * real loading/error boundary instead of a call that can only "succeed."
  */
-export function useJourneyQuery() {
+export function useJourneyQuery(journeyId: string) {
   return useQuery({
-    queryKey: journeyKeys.current(),
-    queryFn: api.fetchJourney,
+    queryKey: journeyKeys.detail(journeyId),
+    queryFn: () => api.fetchJourney(journeyId),
     // The canvas (via the Zustand store) owns the source of truth once
     // loaded; we don't want a background refetch clobbering in-progress
     // edits. Saves flow back in through the mutation's onSuccess below.
@@ -34,23 +63,27 @@ export function useJourneyQuery() {
 }
 
 /** Autosave / explicit save, replacing direct `saveToLocalStorage` calls. */
-export function useSaveJourneyMutation() {
+export function useSaveJourneyMutation(journeyId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (doc: JourneyDocument) => api.saveJourney(doc),
+    mutationFn: (doc: JourneyDocument) => api.saveJourney(journeyId, doc),
     onSuccess: (saved) => {
-      queryClient.setQueryData(journeyKeys.current(), saved);
+      queryClient.setQueryData(journeyKeys.detail(journeyId), saved);
+      // Keep the landing page's list (name/updatedAt/counts) in sync too.
+      queryClient.invalidateQueries({ queryKey: journeyKeys.list() });
     },
   });
 }
 
-/** Publish action — wraps whatever bundle `lib/publishBundle.ts` builds, and refreshes the publish-history list on success. */
-export function usePublishJourneyMutation() {
+/** Publish action — wraps whatever bundle `lib/publishBundle.ts` builds, and refreshes that journey's publish-history list on success. */
+export function usePublishJourneyMutation(journeyId: string) {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (bundle: PublishBundle) => api.publishJourney(bundle),
+    mutationFn: (bundle: PublishBundle) => api.publishJourney(journeyId, bundle),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: publishHistoryKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: publishHistoryKeys.forJourney(journeyId),
+      });
     },
   });
 }
@@ -71,7 +104,7 @@ export function useEventsQuery() {
   });
 }
 
-/** Full event records (Label/Type/Timeout/etc.) for `EventsManagerModal` — `useEventsQuery` above stays the lighter id/name/description shape everything else already expects. */
+/** Full event records (Label/Type/Timeout/etc.) for `EventsListPage` — `useEventsQuery` above stays the lighter id/name/description shape everything else already expects. */
 export function useEventDefinitionsQuery() {
   return useQuery({
     queryKey: catalogKeys.eventDefinitions,
@@ -85,7 +118,7 @@ function invalidateEventQueries(queryClient: ReturnType<typeof useQueryClient>) 
   queryClient.invalidateQueries({ queryKey: catalogKeys.eventDefinitions });
 }
 
-/** Events are a real, user-managed catalog (unlike Audiences/Templates, still static) — see `EventsManagerModal`. */
+/** Events are a real, user-managed catalog (unlike Audiences/Templates, still static) — see `EventsListPage`. */
 export function useCreateEventMutation() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -135,14 +168,11 @@ export function useTestProfilesQuery() {
   });
 }
 
-/** Persisted prior runs for one profile — demonstrates that Test mode profiles are durable, unlike Simulation's ephemeral output. */
-export function useTestRunsQuery(profileId: string | null) {
+/** Persisted prior runs for one profile in one journey — demonstrates that Test mode profiles are durable, unlike Simulation's ephemeral output. */
+export function useTestRunsQuery(journeyId: string, profileId: string | null) {
   return useQuery({
-    queryKey: testModeKeys.runs(
-      api.CURRENT_JOURNEY_KEY,
-      profileId ?? "none",
-    ),
-    queryFn: () => api.fetchTestRuns(api.CURRENT_JOURNEY_KEY, profileId!),
+    queryKey: testModeKeys.runs(journeyId, profileId ?? "none"),
+    queryFn: () => api.fetchTestRuns(journeyId, profileId!),
     enabled: profileId !== null,
   });
 }
@@ -160,20 +190,19 @@ export function useSaveTestRunMutation() {
   });
 }
 
-// --- Phase 5: publish history ---------------------------------------------
+// --- Publish history --------------------------------------------------
 //
-// This app is still single-journey (see README → Non-goals), so this is a
-// history of past publishes of *the one journey being edited*, not a
-// multi-journey list — see the scope note on `api.publishJourney`.
+// Scoped per journey now that journeys are a real, multi-journey
+// collection — see `api.publishJourney`/`api.listPublishHistory`.
 
 export const publishHistoryKeys = {
-  all: ["publish-history"] as const,
+  forJourney: (journeyId: string) => ["publish-history", journeyId] as const,
 };
 
-export function usePublishHistoryQuery() {
+export function usePublishHistoryQuery(journeyId: string) {
   return useQuery({
-    queryKey: publishHistoryKeys.all,
-    queryFn: api.listPublishHistory,
+    queryKey: publishHistoryKeys.forJourney(journeyId),
+    queryFn: () => api.listPublishHistory(journeyId),
   });
 }
 

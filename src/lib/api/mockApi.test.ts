@@ -1,12 +1,19 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   createEvent,
+  createJourney,
   deleteEvent,
+  deleteJourney,
   fetchEventDefinitions,
   fetchEvents,
+  fetchJourney,
+  listJourneys,
+  saveJourney,
   updateEvent,
   type EventDefinitionInput,
 } from "./mockApi";
+import { saveToLocalStorage } from "@/lib/storage";
+import { defaultJourney } from "@/lib/journeySchema";
 
 const baseInput: EventDefinitionInput = {
   name: "Trial started",
@@ -101,5 +108,91 @@ describe("Events catalog (mockApi)", () => {
 
   it("throws when updating an event id that doesn't exist", async () => {
     await expect(updateEvent("nope", baseInput)).rejects.toThrow(/not found/i);
+  });
+});
+
+describe("Journeys (mockApi)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("starts with an empty list when nothing has been saved", async () => {
+    const journeys = await listJourneys();
+    expect(journeys).toEqual([]);
+  });
+
+  it("creates a journey and lists it with a summary", async () => {
+    const summary = await createJourney("My first journey");
+    expect(summary.name).toBe("My first journey");
+    expect(summary.nodeCount).toBeGreaterThan(0); // defaultJourney() seeds one entry node
+
+    const journeys = await listJourneys();
+    expect(journeys).toHaveLength(1);
+    expect(journeys[0]!.id).toBe(summary.id);
+  });
+
+  it("fetches the full document for a created journey by id", async () => {
+    const summary = await createJourney("Fetch me");
+    const doc = await fetchJourney(summary.id);
+    expect(doc.meta?.name).toBe("Fetch me");
+    expect(doc.nodes.length).toBeGreaterThan(0);
+  });
+
+  it("falls back to a default document for an unknown id rather than throwing", async () => {
+    const doc = await fetchJourney("does-not-exist");
+    expect(doc.nodes.length).toBeGreaterThan(0);
+  });
+
+  it("saves changes to a journey and reflects them in the list summary", async () => {
+    const summary = await createJourney("Original name");
+    const doc = await fetchJourney(summary.id);
+    const renamed = { ...doc, meta: { ...doc.meta, name: "Renamed" } };
+
+    await saveJourney(summary.id, renamed);
+
+    const journeys = await listJourneys();
+    expect(journeys.find((j) => j.id === summary.id)?.name).toBe("Renamed");
+  });
+
+  it("deletes a journey so it no longer appears in the list", async () => {
+    const summary = await createJourney("Temporary");
+    await deleteJourney(summary.id);
+    const journeys = await listJourneys();
+    expect(journeys.some((j) => j.id === summary.id)).toBe(false);
+  });
+
+  it("keeps journeys independent — saving one doesn't affect another", async () => {
+    const a = await createJourney("Journey A");
+    const b = await createJourney("Journey B");
+    const docA = await fetchJourney(a.id);
+    await saveJourney(a.id, { ...docA, meta: { ...docA.meta, name: "A renamed" } });
+
+    const journeys = await listJourneys();
+    expect(journeys.find((j) => j.id === a.id)?.name).toBe("A renamed");
+    expect(journeys.find((j) => j.id === b.id)?.name).toBe("Journey B");
+  });
+
+  it("migrates a pre-existing legacy single journey into the list on first read", async () => {
+    const legacyDoc = defaultJourney();
+    legacyDoc.meta = { ...legacyDoc.meta, name: "Legacy journey" };
+    saveToLocalStorage(legacyDoc);
+
+    const journeys = await listJourneys();
+    expect(journeys).toHaveLength(1);
+    expect(journeys[0]!.name).toBe("Legacy journey");
+
+    const doc = await fetchJourney(journeys[0]!.id);
+    expect(doc.meta?.name).toBe("Legacy journey");
+  });
+
+  it("does not re-migrate (and duplicate) the legacy journey on a second read", async () => {
+    const legacyDoc = defaultJourney();
+    saveToLocalStorage(legacyDoc);
+
+    await listJourneys();
+    await createJourney("A second, unrelated journey");
+    const journeys = await listJourneys();
+
+    expect(journeys).toHaveLength(2);
   });
 });

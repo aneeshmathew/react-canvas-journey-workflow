@@ -7,6 +7,7 @@ type Props = {
   propertiesPanelOpen: boolean;
   onDelete: () => void;
   onOpenTestMode: () => void;
+  onBack: () => void;
 };
 
 /**
@@ -15,12 +16,14 @@ type Props = {
  * cluster (Alerts, Manage access, Test mode, Delete, info). This replaces
  * the old flat `.app-toolbar` for journey-identity concerns — the extra
  * authoring tools this app has that this reference layout doesn't
- * (Import/Export/Simulate/Dry run/Undo/Redo/Zoom) live in a secondary row
+ * (Import/Export/Simulate/Dry run/Undo/Redo) live in a secondary row
  * below it, since they aren't part of this header's actual scope.
  *
  * "Manage access" stays an intentional disabled stub — there's no
  * multi-user/permissions model in this authoring tool. "Test mode" is now
- * wired up (Phase 4) and opens `TestModeModal`.
+ * wired up (Phase 4) and opens `TestModeModal`. "Back" now genuinely
+ * navigates to the Journeys landing page — it used to be a visual-only
+ * stub before that page existed.
  */
 export function JourneyEditorHeader({
   journeyName,
@@ -31,14 +34,16 @@ export function JourneyEditorHeader({
   propertiesPanelOpen,
   onDelete,
   onOpenTestMode,
+  onBack,
 }: Props) {
   return (
     <header className="border-b border-slate-200 bg-white px-4 py-2.5">
       <div className="flex items-center gap-3">
         <button
           type="button"
-          aria-label="Back"
-          title="Back"
+          aria-label="Back to Journeys"
+          title="Back to Journeys"
+          onClick={onBack}
           className="flex h-7 w-7 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100"
         >
           ←

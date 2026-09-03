@@ -1,29 +1,28 @@
 import type { ReactNode } from "react";
 
+export type NavView = "journeys" | "events";
+
 type Props = {
   children: ReactNode;
-  onJourneysClick?: () => void;
-  onEventsClick?: () => void;
+  activeView: NavView | null;
+  onNavigate: (view: NavView) => void;
 };
 
 /**
- * Outer app shell — a slim left nav rail plus the main content area.
+ * Outer app shell — a slim left nav rail plus the main content area,
+ * shared across every top-level view (Journeys list, Events list, and the
+ * journey editor) so navigation state lives in one place (`App.tsx`)
+ * instead of each view managing its own modals.
  *
  * Scoped deliberately: full-featured journey-orchestration products
  * typically have a dozen nav sections (Campaigns, Landing pages, Decision
  * Management, Content Management, Data Management, Connections, Customer,
  * Privacy, Administration, ...). This app only builds journeys and manages
  * the events catalog they reference, so the rail has exactly two
- * destinations — see README → "UI layout reference (target)" → "1. Outer
- * app shell — left nav rail". Other sections are omitted, not hidden,
- * until a phase actually needs them.
- *
- * "Journeys" opens `PublishHistoryModal` (Phase 5) — see that component
- * for why it's a publish-history list rather than a real multi-journey
- * list. "Events" opens `EventsManagerModal` — a real, persisted catalog of
- * named events, distinct from the still-static Audiences/Templates lists.
+ * destinations. Other sections are omitted, not hidden, until a phase
+ * actually needs them.
  */
-export function AppShell({ children, onJourneysClick, onEventsClick }: Props) {
+export function AppShell({ children, activeView, onNavigate }: Props) {
   return (
     <div className="flex h-screen w-full bg-slate-100">
       <nav
@@ -39,9 +38,14 @@ export function AppShell({ children, onJourneysClick, onEventsClick }: Props) {
         </div>
         <button
           type="button"
+          aria-current={activeView === "journeys" ? "page" : undefined}
           title="Journeys"
-          onClick={onJourneysClick}
-          className="flex w-11 flex-col items-center gap-1 rounded-md bg-slate-800 py-2 text-[10px] font-medium text-white hover:bg-slate-700"
+          onClick={() => onNavigate("journeys")}
+          className={`flex w-11 flex-col items-center gap-1 rounded-md py-2 text-[10px] font-medium ${
+            activeView === "journeys"
+              ? "bg-slate-800 text-white"
+              : "text-slate-300 hover:bg-slate-800 hover:text-white"
+          }`}
         >
           <span aria-hidden="true" className="text-base leading-none">
             🧭
@@ -50,9 +54,14 @@ export function AppShell({ children, onJourneysClick, onEventsClick }: Props) {
         </button>
         <button
           type="button"
+          aria-current={activeView === "events" ? "page" : undefined}
           title="Events"
-          onClick={onEventsClick}
-          className="flex w-11 flex-col items-center gap-1 rounded-md py-2 text-[10px] font-medium text-slate-300 hover:bg-slate-800 hover:text-white"
+          onClick={() => onNavigate("events")}
+          className={`flex w-11 flex-col items-center gap-1 rounded-md py-2 text-[10px] font-medium ${
+            activeView === "events"
+              ? "bg-slate-800 text-white"
+              : "text-slate-300 hover:bg-slate-800 hover:text-white"
+          }`}
         >
           <span aria-hidden="true" className="text-base leading-none">
             ⚡
