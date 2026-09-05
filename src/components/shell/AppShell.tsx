@@ -1,6 +1,12 @@
 import type { ReactNode } from "react";
 
-export type NavView = "journeys" | "events";
+export type NavView = "journeys" | "events" | "catalogs";
+
+const NAV_ITEMS: { view: NavView; label: string; icon: string }[] = [
+  { view: "journeys", label: "Journeys", icon: "🧭" },
+  { view: "events", label: "Events", icon: "⚡" },
+  { view: "catalogs", label: "Catalogs", icon: "🗂️" },
+];
 
 type Props = {
   children: ReactNode;
@@ -10,17 +16,19 @@ type Props = {
 
 /**
  * Outer app shell — a slim left nav rail plus the main content area,
- * shared across every top-level view (Journeys list, Events list, and the
- * journey editor) so navigation state lives in one place (`App.tsx`)
- * instead of each view managing its own modals.
+ * shared across every top-level view (Journeys list, Events list, Catalogs,
+ * and the journey editor) so navigation state lives in one place
+ * (`App.tsx`) instead of each view managing its own modals.
  *
  * Scoped deliberately: full-featured journey-orchestration products
  * typically have a dozen nav sections (Campaigns, Landing pages, Decision
  * Management, Content Management, Data Management, Connections, Customer,
  * Privacy, Administration, ...). This app only builds journeys and manages
- * the events catalog they reference, so the rail has exactly two
- * destinations. Other sections are omitted, not hidden, until a phase
- * actually needs them.
+ * the reference data they draw from, so the rail has three destinations.
+ * Audiences and Message templates share one "Catalogs" destination (with
+ * tabs) rather than getting their own nav items — see `CatalogsPage`.
+ * Other sections are omitted, not hidden, until a phase actually needs
+ * them.
  */
 export function AppShell({ children, activeView, onNavigate }: Props) {
   return (
@@ -36,38 +44,25 @@ export function AppShell({ children, activeView, onNavigate }: Props) {
         >
           JF
         </div>
-        <button
-          type="button"
-          aria-current={activeView === "journeys" ? "page" : undefined}
-          title="Journeys"
-          onClick={() => onNavigate("journeys")}
-          className={`flex w-11 flex-col items-center gap-1 rounded-md py-2 text-[10px] font-medium ${
-            activeView === "journeys"
-              ? "bg-slate-800 text-white"
-              : "text-slate-300 hover:bg-slate-800 hover:text-white"
-          }`}
-        >
-          <span aria-hidden="true" className="text-base leading-none">
-            🧭
-          </span>
-          Journeys
-        </button>
-        <button
-          type="button"
-          aria-current={activeView === "events" ? "page" : undefined}
-          title="Events"
-          onClick={() => onNavigate("events")}
-          className={`flex w-11 flex-col items-center gap-1 rounded-md py-2 text-[10px] font-medium ${
-            activeView === "events"
-              ? "bg-slate-800 text-white"
-              : "text-slate-300 hover:bg-slate-800 hover:text-white"
-          }`}
-        >
-          <span aria-hidden="true" className="text-base leading-none">
-            ⚡
-          </span>
-          Events
-        </button>
+        {NAV_ITEMS.map((item) => (
+          <button
+            key={item.view}
+            type="button"
+            aria-current={activeView === item.view ? "page" : undefined}
+            title={item.label}
+            onClick={() => onNavigate(item.view)}
+            className={`flex w-11 flex-col items-center gap-1 rounded-md py-2 text-[10px] font-medium ${
+              activeView === item.view
+                ? "bg-slate-800 text-white"
+                : "text-slate-300 hover:bg-slate-800 hover:text-white"
+            }`}
+          >
+            <span aria-hidden="true" className="text-base leading-none">
+              {item.icon}
+            </span>
+            {item.label}
+          </button>
+        ))}
       </nav>
       <div className="flex min-w-0 flex-1 flex-col">{children}</div>
     </div>

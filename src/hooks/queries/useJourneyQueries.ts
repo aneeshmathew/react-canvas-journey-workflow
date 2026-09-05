@@ -11,9 +11,11 @@ export const journeyKeys = {
 
 export const catalogKeys = {
   audiences: ["catalog", "audiences"] as const,
+  audienceDefinitions: ["catalog", "audience-definitions"] as const,
   events: ["catalog", "events"] as const,
   eventDefinitions: ["catalog", "event-definitions"] as const,
   templates: ["catalog", "templates"] as const,
+  templateDefinitions: ["catalog", "template-definitions"] as const,
 };
 
 /** The Journeys landing page's data grid. */
@@ -96,6 +98,51 @@ export function useAudiencesQuery() {
   });
 }
 
+/** Full audience records for the Catalogs page's Audiences tab — `useAudiencesQuery` above stays the lighter id/name/description shape the Inspector datalist expects. */
+export function useAudienceDefinitionsQuery() {
+  return useQuery({
+    queryKey: catalogKeys.audienceDefinitions,
+    queryFn: api.fetchAudienceDefinitions,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+function invalidateAudienceQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: catalogKeys.audiences });
+  queryClient.invalidateQueries({ queryKey: catalogKeys.audienceDefinitions });
+}
+
+/** Audiences are now a real, persisted catalog too — same pattern as Events. */
+export function useCreateAudienceMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: api.AudienceDefinitionInput) => api.createAudience(input),
+    onSuccess: () => invalidateAudienceQueries(queryClient),
+  });
+}
+
+export function useUpdateAudienceMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: string;
+      input: api.AudienceDefinitionInput;
+    }) => api.updateAudience(id, input),
+    onSuccess: () => invalidateAudienceQueries(queryClient),
+  });
+}
+
+export function useDeleteAudienceMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteAudience(id),
+    onSuccess: () => invalidateAudienceQueries(queryClient),
+  });
+}
+
 export function useEventsQuery() {
   return useQuery({
     queryKey: catalogKeys.events,
@@ -118,7 +165,7 @@ function invalidateEventQueries(queryClient: ReturnType<typeof useQueryClient>) 
   queryClient.invalidateQueries({ queryKey: catalogKeys.eventDefinitions });
 }
 
-/** Events are a real, user-managed catalog (unlike Audiences/Templates, still static) — see `EventsListPage`. */
+/** Events, Audiences, and Templates are all real, persisted catalogs (see `EventsListPage`/`CatalogsPage`). */
 export function useCreateEventMutation() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -149,6 +196,50 @@ export function useMessageTemplatesQuery() {
     queryKey: catalogKeys.templates,
     queryFn: api.fetchMessageTemplates,
     staleTime: 5 * 60 * 1000,
+  });
+}
+
+/** Full template records for the Catalogs page's Templates tab. */
+export function useTemplateDefinitionsQuery() {
+  return useQuery({
+    queryKey: catalogKeys.templateDefinitions,
+    queryFn: api.fetchTemplateDefinitions,
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+function invalidateTemplateQueries(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: catalogKeys.templates });
+  queryClient.invalidateQueries({ queryKey: catalogKeys.templateDefinitions });
+}
+
+export function useCreateTemplateMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: api.TemplateDefinitionInput) => api.createTemplate(input),
+    onSuccess: () => invalidateTemplateQueries(queryClient),
+  });
+}
+
+export function useUpdateTemplateMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      input,
+    }: {
+      id: string;
+      input: api.TemplateDefinitionInput;
+    }) => api.updateTemplate(id, input),
+    onSuccess: () => invalidateTemplateQueries(queryClient),
+  });
+}
+
+export function useDeleteTemplateMutation() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.deleteTemplate(id),
+    onSuccess: () => invalidateTemplateQueries(queryClient),
   });
 }
 

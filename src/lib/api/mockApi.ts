@@ -12,6 +12,7 @@ import {
   defaultJourney,
   parseJourney,
   serializeJourney,
+  type ActionNodeType,
   type JourneyDocument,
   type JourneyNodeData,
 } from "@/lib/journeySchema";
@@ -237,25 +238,231 @@ export type CatalogItem = {
   description?: string;
 };
 
-const AUDIENCES: CatalogItem[] = [
-  { id: "aud-newsletter", name: "Newsletter subscribers" },
-  { id: "aud-vip", name: "VIP customers" },
-  { id: "aud-churn-risk", name: "Churn risk" },
-  { id: "aud-loyalty-gold", name: "Loyalty program — Gold members" },
+const MOCK_AUTHOR = "You"; // Single-user mock app — always the same placeholder, shared by every catalog type below (Audiences, Templates, Events)
+
+// --- Audiences catalog: persisted and user-editable ------------------------
+//
+// Same pattern as Events (see below): a real, persisted catalog rather than
+// a static mock list, with create/edit/delete surfaced on the Catalogs
+// landing page. Kept deliberately simpler than Events — no domain-specific
+// fields like Type/Timeout, since a mock "audience size" or membership rule
+// would be pure invention with nothing behind it.
+
+export type AudienceDefinition = {
+  id: string;
+  name: string;
+  description?: string;
+  author: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type AudienceDefinitionInput = {
+  name: string;
+  description?: string;
+};
+
+const AUDIENCES_KEY = "journey-builder:audiences";
+
+function makeDefaultAudience(id: string, name: string): AudienceDefinition {
+  const now = new Date().toISOString();
+  return { id, name, author: MOCK_AUTHOR, createdAt: now, updatedAt: now };
+}
+
+const DEFAULT_AUDIENCES: AudienceDefinition[] = [
+  makeDefaultAudience("aud-newsletter", "Newsletter subscribers"),
+  makeDefaultAudience("aud-vip", "VIP customers"),
+  makeDefaultAudience("aud-churn-risk", "Churn risk"),
+  makeDefaultAudience("aud-loyalty-gold", "Loyalty program — Gold members"),
 ];
 
-const TEMPLATES: CatalogItem[] = [
-  { id: "tpl-welcome", name: "Welcome email" },
-  { id: "tpl-cart-reminder", name: "Cart reminder" },
-  { id: "tpl-winback", name: "Win-back offer" },
-];
+function loadAudiences(): AudienceDefinition[] {
+  try {
+    const raw = localStorage.getItem(AUDIENCES_KEY);
+    if (raw) return JSON.parse(raw) as AudienceDefinition[];
+  } catch {
+    /* fall through to defaults */
+  }
+  return DEFAULT_AUDIENCES.map((a) => ({ ...a }));
+}
 
+function saveAudiencesList(list: AudienceDefinition[]): void {
+  try {
+    localStorage.setItem(AUDIENCES_KEY, JSON.stringify(list));
+  } catch {
+    /* quota or private mode */
+  }
+}
+
+/** `useAudiencesQuery` / the Inspector's `<datalist>` only need id+name+description. */
 export async function fetchAudiences(): Promise<CatalogItem[]> {
-  return delay(AUDIENCES, 120);
+  return delay(
+    loadAudiences().map(({ id, name, description }) => ({ id, name, description })),
+    120,
+  );
+}
+
+export async function fetchAudienceDefinitions(): Promise<AudienceDefinition[]> {
+  return delay(loadAudiences(), 120);
+}
+
+export async function createAudience(
+  input: AudienceDefinitionInput,
+): Promise<AudienceDefinition> {
+  const now = new Date().toISOString();
+  const item: AudienceDefinition = {
+    id: crypto.randomUUID(),
+    name: input.name.trim(),
+    description: input.description?.trim() || undefined,
+    author: MOCK_AUTHOR,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const list = loadAudiences();
+  list.push(item);
+  saveAudiencesList(list);
+  return delay(item, 150);
+}
+
+export async function updateAudience(
+  id: string,
+  input: AudienceDefinitionInput,
+): Promise<AudienceDefinition> {
+  const list = loadAudiences();
+  const idx = list.findIndex((a) => a.id === id);
+  if (idx === -1) throw new Error(`Audience "${id}" not found.`);
+  const updated: AudienceDefinition = {
+    ...list[idx]!,
+    name: input.name.trim(),
+    description: input.description?.trim() || undefined,
+    updatedAt: new Date().toISOString(),
+  };
+  list[idx] = updated;
+  saveAudiencesList(list);
+  return delay(updated, 150);
+}
+
+export async function deleteAudience(id: string): Promise<void> {
+  saveAudiencesList(loadAudiences().filter((a) => a.id !== id));
+  return delay(undefined, 100);
+}
+
+// --- Message templates catalog: persisted and user-editable ---------------
+//
+// Same pattern again, with one extra field that's genuinely meaningful for
+// a template: which channel it's for (reuses the real `ActionNodeType`
+// union from journeySchema.ts rather than inventing a parallel one).
+
+export type TemplateDefinition = {
+  id: string;
+  name: string;
+  description?: string;
+  channel: ActionNodeType;
+  author: string;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type TemplateDefinitionInput = {
+  name: string;
+  description?: string;
+  channel: ActionNodeType;
+};
+
+const TEMPLATES_KEY = "journey-builder:templates";
+
+function makeDefaultTemplate(
+  id: string,
+  name: string,
+  channel: ActionNodeType,
+): TemplateDefinition {
+  const now = new Date().toISOString();
+  return {
+    id,
+    name,
+    channel,
+    author: MOCK_AUTHOR,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+const DEFAULT_TEMPLATES: TemplateDefinition[] = [
+  makeDefaultTemplate("tpl-welcome", "Welcome email", "action-email"),
+  makeDefaultTemplate("tpl-cart-reminder", "Cart reminder", "action-email"),
+  makeDefaultTemplate("tpl-winback", "Win-back offer", "action-email"),
+];
+
+function loadTemplates(): TemplateDefinition[] {
+  try {
+    const raw = localStorage.getItem(TEMPLATES_KEY);
+    if (raw) return JSON.parse(raw) as TemplateDefinition[];
+  } catch {
+    /* fall through to defaults */
+  }
+  return DEFAULT_TEMPLATES.map((t) => ({ ...t }));
+}
+
+function saveTemplatesList(list: TemplateDefinition[]): void {
+  try {
+    localStorage.setItem(TEMPLATES_KEY, JSON.stringify(list));
+  } catch {
+    /* quota or private mode */
+  }
 }
 
 export async function fetchMessageTemplates(): Promise<CatalogItem[]> {
-  return delay(TEMPLATES, 120);
+  return delay(
+    loadTemplates().map(({ id, name, description }) => ({ id, name, description })),
+    120,
+  );
+}
+
+export async function fetchTemplateDefinitions(): Promise<TemplateDefinition[]> {
+  return delay(loadTemplates(), 120);
+}
+
+export async function createTemplate(
+  input: TemplateDefinitionInput,
+): Promise<TemplateDefinition> {
+  const now = new Date().toISOString();
+  const item: TemplateDefinition = {
+    id: crypto.randomUUID(),
+    name: input.name.trim(),
+    description: input.description?.trim() || undefined,
+    channel: input.channel,
+    author: MOCK_AUTHOR,
+    createdAt: now,
+    updatedAt: now,
+  };
+  const list = loadTemplates();
+  list.push(item);
+  saveTemplatesList(list);
+  return delay(item, 150);
+}
+
+export async function updateTemplate(
+  id: string,
+  input: TemplateDefinitionInput,
+): Promise<TemplateDefinition> {
+  const list = loadTemplates();
+  const idx = list.findIndex((t) => t.id === id);
+  if (idx === -1) throw new Error(`Template "${id}" not found.`);
+  const updated: TemplateDefinition = {
+    ...list[idx]!,
+    name: input.name.trim(),
+    description: input.description?.trim() || undefined,
+    channel: input.channel,
+    updatedAt: new Date().toISOString(),
+  };
+  list[idx] = updated;
+  saveTemplatesList(list);
+  return delay(updated, 150);
+}
+
+export async function deleteTemplate(id: string): Promise<void> {
+  saveTemplatesList(loadTemplates().filter((t) => t.id !== id));
+  return delay(undefined, 100);
 }
 
 // --- Events catalog: persisted and user-editable --------------------------
@@ -287,7 +494,6 @@ export type EventDefinition = {
 };
 
 const EVENTS_KEY = "journey-builder:events";
-const MOCK_AUTHOR = "You";
 
 function makeDefaultEvent(id: string, name: string): EventDefinition {
   const now = new Date().toISOString();

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { AppShell, type NavView } from "@/components/shell/AppShell";
 import { JourneysListPage } from "@/components/journeys/JourneysListPage";
 import { EventsListPage } from "@/components/events/EventsListPage";
+import { CatalogsPage } from "@/components/catalogs/CatalogsPage";
 import { parseHash, viewToHash, type View } from "@/lib/route";
 import { JourneyBuilder } from "./JourneyBuilder";
 
@@ -56,6 +57,7 @@ export default function App() {
         />
       ) : null}
       {view.type === "events" ? <EventsListPage /> : null}
+      {view.type === "catalogs" ? <CatalogsPage /> : null}
       {view.type === "editor" ? (
         <JourneyBuilder
           journeyId={view.journeyId}

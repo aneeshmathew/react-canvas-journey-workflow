@@ -64,6 +64,8 @@ src/
 │   │   └── JourneysListPage.tsx    # Landing page: data grid of every journey, create/edit/delete
 │   ├── events/
 │   │   └── EventsListPage.tsx      # Events landing page: list first, then create/edit/delete
+│   ├── catalogs/
+│   │   └── CatalogsPage.tsx        # Audiences + Message templates landing page (two tabs), same list-first pattern
 │   ├── palette/
 │   │   └── Palette.tsx             # Accordion: Events / Orchestration / Actions / Fragments + search
 │   ├── nodes/
@@ -93,6 +95,7 @@ src/
 - **`App`** — Owns which top-level view is showing (`journeys` | `events` | `editor`), all inside one shared `AppShell` so the nav rail's active state stays consistent. This is the app's only "router" — there's no URL-based routing library; view state is plain React state.
 - **`JourneysListPage`** — The landing page: a data grid of every journey (name, last updated, node/edge counts) with Create/Edit/Delete. Opening or creating a journey hands its id to `JourneyBuilder`.
 - **`EventsListPage`** — Same list-first pattern as Journeys: a data grid of events, "+ New event," and click-a-row-to-edit. Not a modal — a full page, consistent with Journeys.
+- **`CatalogsPage`** — Audiences and Message templates, each with their own tab and the same list-first-then-create/edit/delete pattern. One page with two tabs rather than two separate nav items, since both are small, closely-related reference-data types.
 - **`JourneyBuilder`** — Wraps one journey's editor in `ReactFlowProvider`, given a `journeyId` and an `onBack` callback. Hosts `JourneyEditorHeader`, `JourneyPropertiesPanel`, the secondary authoring toolbar (Clear canvas/Import/Export/Simulation/Dry run/Publish/History/Undo/Redo/Copy/Paste/Save as Fragment), and **`FlowCanvas`**, which owns all canvas rendering and wires the Zustand store to React Flow for that specific journey.
 - **`journeyStore`** (Zustand) — `nodes`, `edges`, journey name/description, viewport, selection, panel widths, undo/redo history, and the copy/paste clipboard, for **one journey's canvas at a time**. It's a module-level singleton, so switching journeys re-hydrates it explicitly (guarded by a `journeyId`-keyed ref in `JourneyBuilder`, not the store's own `hydrated` flag) rather than assuming a fresh store per journey.
 - **`Palette`** — Four accordion groups (Events, Orchestration, Actions, Fragments) plus a pinned structural "End" item, with a search filter across all of them. Drags use `dataTransfer` with either `application/reactflow` (a single node type) or a dedicated Fragment mime type (a whole saved subgraph). Drops are handled on the React Flow pane (`onDrop`/`onDragOver`).
@@ -168,6 +171,8 @@ So: **authoring** = this UI; **running in production** = envisioned as importing
 | `journey-builder:fragments` | Saved Journey Fragments |
 | `journey-builder:publish-history` | Publish history records, each tagged with the journey id it belongs to |
 | `journey-builder:events` | User-created events catalog |
+| `journey-builder:audiences` | User-created audiences catalog |
+| `journey-builder:templates` | User-created message templates catalog |
 
 ---
 
@@ -199,7 +204,7 @@ Read Audience sits under **Orchestration** rather than Events: a scheduled/batch
 
 ### Layout
 
-- **Left nav rail** (`AppShell`) — two destinations, both real landing pages: "Journeys" (a data grid of every journey — see `JourneysListPage`) and "Events" (a list-then-create/edit/delete catalog page — see `EventsListPage`). This app builds journeys and manages the catalog data they reference, and nothing else, so there's no reason to build out placeholder nav sections for capabilities that don't exist yet.
+- **Left nav rail** (`AppShell`) — three destinations, all real landing pages: "Journeys" (a data grid of every journey — see `JourneysListPage`), "Events" (a list-then-create/edit/delete catalog page — see `EventsListPage`), and "Catalogs" (Audiences + Message templates, two tabs — see `CatalogsPage`). This app builds journeys and manages the catalog data they reference, and nothing else, so there's no reason to build out placeholder nav sections for capabilities that don't exist yet.
 - **Journey editor header** (`JourneyEditorHeader`) — a working Back button (returns to the Journeys landing page), name, Draft/Version/saved status, Alerts (wired to real validation output), Test mode, Delete, and a properties-panel toggle. "Manage access" is an intentionally disabled stub — there's no multi-user/permissions model in this authoring tool.
 - **Secondary toolbar** — the authoring conveniences that aren't part of the header concept above: Clear canvas/Import/Export, Simulation/Dry run/Publish/History, Undo/Redo, Copy/Paste/Save as Fragment. Every button pairs an icon with its label. No dedicated zoom controls here — React Flow's own `<Controls>` (bottom-left of the canvas) already covers zoom in/out/fit-view, so a second zoom control in the toolbar was redundant.
 
@@ -220,7 +225,7 @@ Honest status of every area this app's design touches, so nothing reads as more 
 | Testing | 3 distinct modes: Simulation, Test mode, Dry run | Test mode's branch resolution is manual (a person clicks the path) since Condition branches are named, not rule-expressions — there's nothing to evaluate a profile against automatically |
 | Publish | Compiles a real (best-effort) n8n workflow structurally; publish history view | Nothing "goes live" — there's no execution backend, real or mock, for a published journey to actually run against |
 | Reporting | — | Not built, and not faked — see Non-goals |
-| Data model | Events are a real, persisted, user-manageable catalog with create/edit/delete (`EventsListPage`); Audiences and Message templates are still a fixed mock list feeding Inspector `<datalist>` suggestions | No real typed *reference* even for Events — an event-based node stores the event's name as free text, not a link to its catalog id, so renaming an event doesn't update nodes that already reference the old name. Event id type and Timeout fields are captured but not used by validation/simulation yet. |
+| Data model | Events, Audiences, and Message templates are all real, persisted, user-manageable catalogs with create/edit/delete (`EventsListPage`, `CatalogsPage`) | No real typed *reference* for any of them — a node stores a catalog entry's *name* as free text, not a link to its id, so renaming an entry doesn't update journeys that already reference the old name. Event id type and Timeout fields on Events are captured but not used by validation/simulation yet. |
 | Journey Fragments | Save-selection-as-fragment, browse/drag from palette, insert with fresh ids | No rename/edit of a saved fragment after creation (delete only) |
 | Reaction events | Modeled with a reaction kind (opened/clicked/bounced/unsubscribed) | No structural link to the specific prior Action node it reacts to — only a free-text hint |
 | State management | Zustand store with undo/redo, copy/paste clipboard | Undo/redo covers structural edits and Inspector save/close, not every keystroke while a field is focused |
@@ -277,7 +282,7 @@ Known limitations, stated directly:
 - "Author" is a fixed placeholder ("You") — there's no real identity system in this single-user tool, so it's a display field for layout fidelity, not a real feature.
 - "Event id type" and the Timeout fields are captured and persisted but not wired into validation or simulation anywhere yet — they exist because the reference layout has them, not because journey behavior currently depends on them.
 
-Audiences and Message templates could follow the same real-catalog-with-edit pattern later; scoped to Events only since that's what was asked for.
+Audiences and Message templates followed the same real-catalog-with-edit pattern shortly after — see "Post-request: multi-journey support, Events landing page, and UI polish" → item 3 below.
 
 ### Post-request: multi-journey support, Events landing page, and UI polish
 
@@ -296,9 +301,9 @@ Everything below is also reflected in the Gap analysis table above; this is the 
 
 1. [x] **URL/refresh persistence for navigation.** Fixed: `lib/route.ts` reads/writes `window.location.hash` (`#/journeys`, `#/events`, `#/journey/<id>`) — no routing library, just `App.tsx` syncing state to `history.pushState` and listening for `hashchange` (covers back/forward too). Refreshing, bookmarking, or sharing a journey's URL now reopens that exact journey instead of dropping back to the list. 10 new tests in `route.test.ts` for the parse/serialize round-trip, including malformed-hash fallback.
 2. [x] **Clarify "New" vs. "+ New journey."** Fixed, and a real bug came with it: the toolbar button was renamed **"Clear canvas"** (resets *this* journey's canvas to a blank entry node — same underlying action as before, just honestly labeled) with a tooltip explicitly contrasting it with the landing page's "+ New journey." While fixing this, found that the header's **"Delete" button didn't actually delete anything** — it silently called the same clear-canvas action, so "Delete" and the old "New" were the exact same operation under two different labels. Now Delete calls `useDeleteJourneyMutation` for real, removes the journey from the collection, and navigates back to the Journeys list — distinct from Clear canvas in both label and behavior, not just label.
-3. [ ] **Audiences and Message templates as real catalogs.** Only Events got the real create/edit/delete treatment; Audiences and Templates are still the original static mock list. Extending the same pattern (persisted catalog + landing page) would make all three consistent.
+3. [x] **Audiences and Message templates as real catalogs.** Fixed: both now follow the exact Events pattern — persisted (`journey-builder:audiences` / `journey-builder:templates`), with real create/edit/delete. They share one **Catalogs** landing page (`CatalogsPage`, two tabs) rather than getting their own nav items each, since splitting two small, closely-related reference-data types into separate top-level destinations would clutter the rail. Kept intentionally simpler than Events: Audiences are just Label + Description (no invented "audience size" or membership-rule fields), and Templates add one genuinely meaningful field — Channel, reusing the real `ActionNodeType` union rather than a parallel enum. 12 new tests.
 4. [ ] **Search/filter/sort/pagination on the Journeys and Events grids.** Fine at the current scale (a handful of rows); would matter once either list grows.
-5. [ ] **Event → node linkage by id, not name.** An event-based node stores an event's *name* as free text; renaming an event in the catalog doesn't update journeys that already reference the old name.
+5. [ ] **Catalog → node linkage by id, not name.** A node stores a catalog entry's *name* as free text (events, audiences, templates alike); renaming an entry in its catalog doesn't update journeys that already reference the old name.
 6. [ ] **Richer per-channel Action schemas.** Each of the 8 channels collects one generic content field; real per-channel config (Push title+body+deep-link, a real code editor for Code-based experiences, etc.) is deeper than this app models today.
 7. [ ] **Journey Fragment rename/edit after creation** (currently delete-only).
 8. [ ] **Reaction-event structural linkage** to the specific prior Action node it reacts to (currently a free-text note only).
@@ -309,16 +314,9 @@ Lower priority / larger architectural lifts, not next in line but tracked:
 - Full reporting/analytics (see Non-goals — deliberately not faked in the meantime)
 
 ---
-
-## Non-goals
-
-- Real backend/persistence beyond a mock API layer — this stays a front-end authoring tool
-- Real message delivery (email/SMS/push sending) — out of scope entirely
-- Full reporting/analytics — no mock numbers are fabricated; the publish-history view shows structural facts only
-- Multi-user collaboration/permissions
-
----
-
-## License
-
-Private / project-specific — add a `LICENSE` file if you need to publish terms.
+Remaining, in order:
+4. Search/filter/sort/pagination on the Journeys and Events grids
+5. Catalog → node linkage by id, not name (affects all three catalogs now)
+6. Richer per-channel Action schemas
+7. Journey Fragment rename/edit after creation
+8. Reaction-event structural linkage

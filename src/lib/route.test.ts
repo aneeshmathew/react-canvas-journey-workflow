@@ -14,6 +14,10 @@ describe("parseHash", () => {
     expect(parseHash("#/events")).toEqual({ type: "events" });
   });
 
+  it("parses the catalogs hash", () => {
+    expect(parseHash("#/catalogs")).toEqual({ type: "catalogs" });
+  });
+
   it("parses an editor hash into a journeyId", () => {
     expect(parseHash("#/journey/abc-123")).toEqual({
       type: "editor",
@@ -39,9 +43,10 @@ describe("parseHash", () => {
 });
 
 describe("viewToHash", () => {
-  it("round-trips journeys/events views", () => {
+  it("round-trips journeys/events/catalogs views", () => {
     expect(viewToHash({ type: "journeys" })).toBe("#/journeys");
     expect(viewToHash({ type: "events" })).toBe("#/events");
+    expect(viewToHash({ type: "catalogs" })).toBe("#/catalogs");
   });
 
   it("round-trips an editor view, encoding the id", () => {
@@ -51,7 +56,7 @@ describe("viewToHash", () => {
   });
 
   it("round-trips every parseHash output back through viewToHash and parseHash again", () => {
-    const samples = ["#/journeys", "#/events", "#/journey/xyz-789"];
+    const samples = ["#/journeys", "#/events", "#/catalogs", "#/journey/xyz-789"];
     for (const hash of samples) {
       const view = parseHash(hash);
       expect(parseHash(viewToHash(view))).toEqual(view);

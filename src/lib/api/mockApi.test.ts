@@ -1,15 +1,25 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
+  createAudience,
   createEvent,
   createJourney,
+  createTemplate,
+  deleteAudience,
   deleteEvent,
   deleteJourney,
+  deleteTemplate,
+  fetchAudienceDefinitions,
+  fetchAudiences,
   fetchEventDefinitions,
   fetchEvents,
   fetchJourney,
+  fetchMessageTemplates,
+  fetchTemplateDefinitions,
   listJourneys,
   saveJourney,
+  updateAudience,
   updateEvent,
+  updateTemplate,
   type EventDefinitionInput,
 } from "./mockApi";
 import { saveToLocalStorage } from "@/lib/storage";
@@ -194,5 +204,112 @@ describe("Journeys (mockApi)", () => {
     const journeys = await listJourneys();
 
     expect(journeys).toHaveLength(2);
+  });
+});
+
+describe("Audiences catalog (mockApi)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("returns a non-empty default catalog when nothing has been saved yet", async () => {
+    const audiences = await fetchAudiences();
+    expect(audiences.length).toBeGreaterThan(0);
+  });
+
+  it("creates, persists, and lists a new audience", async () => {
+    const before = await fetchAudiences();
+    const created = await createAudience({
+      name: "Frequent buyers",
+      description: "3+ purchases in 90 days",
+    });
+    expect(created.name).toBe("Frequent buyers");
+    expect(created.author).toBeTruthy();
+
+    const after = await fetchAudiences();
+    expect(after.length).toBe(before.length + 1);
+  });
+
+  it("updates an audience in place", async () => {
+    const created = await createAudience({ name: "Original" });
+    const updated = await updateAudience(created.id, { name: "Renamed" });
+    expect(updated.id).toBe(created.id);
+    expect(updated.name).toBe("Renamed");
+
+    const list = await fetchAudienceDefinitions();
+    expect(list.find((a) => a.id === created.id)?.name).toBe("Renamed");
+  });
+
+  it("deletes an audience", async () => {
+    const created = await createAudience({ name: "Temporary" });
+    await deleteAudience(created.id);
+    const after = await fetchAudiences();
+    expect(after.some((a) => a.id === created.id)).toBe(false);
+  });
+
+  it("throws when updating an audience id that doesn't exist", async () => {
+    await expect(
+      updateAudience("nope", { name: "x" }),
+    ).rejects.toThrow(/not found/i);
+  });
+
+  it("does not mutate the shared defaults when reading twice with nothing saved", async () => {
+    // Regression test for the reference-sharing bug caught earlier in the
+    // Events catalog (see README) — guards the same pattern here too.
+    const first = await fetchAudiences();
+    await createAudience({ name: "New one" });
+    const second = await fetchAudiences();
+    expect(second.length).toBe(first.length + 1);
+  });
+});
+
+describe("Message templates catalog (mockApi)", () => {
+  beforeEach(() => {
+    localStorage.clear();
+  });
+
+  it("returns a non-empty default catalog when nothing has been saved yet", async () => {
+    const templates = await fetchMessageTemplates();
+    expect(templates.length).toBeGreaterThan(0);
+  });
+
+  it("creates a template with a channel and persists it", async () => {
+    const created = await createTemplate({
+      name: "SMS reminder",
+      description: "Sent 1 hour before an appointment",
+      channel: "action-sms",
+    });
+    expect(created.channel).toBe("action-sms");
+
+    const list = await fetchTemplateDefinitions();
+    expect(list.some((t) => t.id === created.id)).toBe(true);
+  });
+
+  it("updates a template's channel", async () => {
+    const created = await createTemplate({
+      name: "Push test",
+      channel: "action-push",
+    });
+    const updated = await updateTemplate(created.id, {
+      name: "Push test",
+      channel: "action-inapp",
+    });
+    expect(updated.channel).toBe("action-inapp");
+  });
+
+  it("deletes a template", async () => {
+    const created = await createTemplate({
+      name: "Temp template",
+      channel: "action-email",
+    });
+    await deleteTemplate(created.id);
+    const list = await fetchTemplateDefinitions();
+    expect(list.some((t) => t.id === created.id)).toBe(false);
+  });
+
+  it("throws when updating a template id that doesn't exist", async () => {
+    await expect(
+      updateTemplate("nope", { name: "x", channel: "action-email" }),
+    ).rejects.toThrow(/not found/i);
   });
 });

@@ -1,11 +1,12 @@
 export type View =
   | { type: "journeys" }
   | { type: "events" }
+  | { type: "catalogs" }
   | { type: "editor"; journeyId: string };
 
 /**
  * Turns `window.location.hash` into a `View`. Deliberately not a routing
- * library — there are only three destinations, so reading/writing the hash
+ * library — there are only four destinations, so reading/writing the hash
  * directly (see `viewToHash`) is enough to get refresh persistence and
  * back/forward-button support without adding a dependency.
  *
@@ -19,6 +20,7 @@ export function parseHash(hash: string): View {
     if (id) return { type: "editor", journeyId: id };
   }
   if (clean === "events") return { type: "events" };
+  if (clean === "catalogs") return { type: "catalogs" };
   return { type: "journeys" };
 }
 
@@ -28,6 +30,8 @@ export function viewToHash(view: View): string {
       return `#/journey/${encodeURIComponent(view.journeyId)}`;
     case "events":
       return "#/events";
+    case "catalogs":
+      return "#/catalogs";
     case "journeys":
       return "#/journeys";
     default:
