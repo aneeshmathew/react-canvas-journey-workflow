@@ -11,8 +11,22 @@ import {
   useEventDefinitionsQuery,
   useUpdateEventMutation,
 } from "@/hooks/queries/useJourneyQueries";
+import { useListControls } from "@/hooks/useListControls";
+import {
+  GridSearchInput,
+  PaginationFooter,
+  SortableHeader,
+} from "@/components/shared/GridControls";
 
 const NEW_EVENT_ID = "__new__";
+
+type EventColumn = "name" | "type" | "description";
+
+function getSortValue(ev: EventDefinition, column: EventColumn) {
+  if (column === "description") return (ev.description ?? "").toLowerCase();
+  if (column === "name") return ev.name.toLowerCase();
+  return ev[column];
+}
 
 function blankForm(): EventDefinitionInput {
   return {
@@ -53,6 +67,23 @@ export function EventsListPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [form, setForm] = useState<EventDefinitionInput>(blankForm());
   const [formError, setFormError] = useState<string | null>(null);
+
+  const {
+    query,
+    setQuery,
+    sort,
+    toggleColumnSort,
+    page,
+    setPage,
+    totalPages,
+    totalCount,
+    filteredCount,
+    pageItems,
+  } = useListControls<EventDefinition, EventColumn>({
+    items: eventsQuery.data ?? [],
+    getSearchableText: (ev) => [ev.name, ev.description],
+    getSortValue,
+  });
 
   const selectedEvent =
     selectedId && selectedId !== NEW_EVENT_ID
@@ -307,14 +338,39 @@ export function EventsListPage() {
         </button>
       </div>
 
+      <div className="mb-3">
+        <GridSearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search events…"
+        />
+      </div>
+
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <th className="px-4 py-2.5">Label</th>
-              <th className="px-4 py-2.5">Type</th>
-              <th className="px-4 py-2.5">Description</th>
-              <th className="px-4 py-2.5 text-right">Actions</th>
+            <tr className="border-b border-slate-200 bg-slate-50 text-xs">
+              <SortableHeader
+                column="name"
+                label="Label"
+                sort={sort}
+                onToggle={toggleColumnSort}
+              />
+              <SortableHeader
+                column="type"
+                label="Type"
+                sort={sort}
+                onToggle={toggleColumnSort}
+              />
+              <SortableHeader
+                column="description"
+                label="Description"
+                sort={sort}
+                onToggle={toggleColumnSort}
+              />
+              <th className="px-4 py-2.5 text-right font-semibold uppercase tracking-wide text-slate-500">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -332,7 +388,14 @@ export function EventsListPage() {
                 </td>
               </tr>
             ) : null}
-            {(eventsQuery.data ?? []).map((ev) => (
+            {eventsQuery.data && eventsQuery.data.length > 0 && filteredCount === 0 ? (
+              <tr>
+                <td colSpan={4} className="px-4 py-8 text-center text-slate-400">
+                  No events match "{query}".
+                </td>
+              </tr>
+            ) : null}
+            {pageItems.map((ev) => (
               <tr
                 key={ev.id}
                 className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
@@ -369,6 +432,14 @@ export function EventsListPage() {
             ))}
           </tbody>
         </table>
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          totalCount={totalCount}
+          filteredCount={filteredCount}
+          itemLabel={totalCount === 1 ? "event" : "events"}
+        />
       </div>
     </div>
   );

@@ -4,10 +4,25 @@ import {
   useDeleteJourneyMutation,
   useJourneysListQuery,
 } from "@/hooks/queries/useJourneyQueries";
+import { useListControls } from "@/hooks/useListControls";
+import type { JourneySummary } from "@/lib/api/mockApi";
+import {
+  GridSearchInput,
+  PaginationFooter,
+  SortableHeader,
+} from "@/components/shared/GridControls";
 
 type Props = {
   onOpenJourney: (journeyId: string) => void;
 };
+
+type JourneyColumn = "name" | "updatedAt" | "nodeCount" | "edgeCount";
+
+function getSortValue(journey: JourneySummary, column: JourneyColumn) {
+  if (column === "name") return journey.name.toLowerCase();
+  if (column === "updatedAt") return journey.updatedAt;
+  return journey[column];
+}
 
 /**
  * The app's landing page: a data grid of every journey, with create/edit/
@@ -23,6 +38,23 @@ export function JourneysListPage({ onOpenJourney }: Props) {
   const createJourney = useCreateJourneyMutation();
   const deleteJourney = useDeleteJourneyMutation();
   const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null);
+
+  const {
+    query,
+    setQuery,
+    sort,
+    toggleColumnSort,
+    page,
+    setPage,
+    totalPages,
+    totalCount,
+    filteredCount,
+    pageItems,
+  } = useListControls<JourneySummary, JourneyColumn>({
+    items: journeysQuery.data ?? [],
+    getSearchableText: (j) => [j.name, j.description],
+    getSortValue,
+  });
 
   const handleCreate = () => {
     createJourney.mutate(undefined, {
@@ -61,15 +93,45 @@ export function JourneysListPage({ onOpenJourney }: Props) {
         </button>
       </div>
 
+      <div className="mb-3">
+        <GridSearchInput
+          value={query}
+          onChange={setQuery}
+          placeholder="Search journeys…"
+        />
+      </div>
+
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <table className="w-full text-left text-sm">
           <thead>
-            <tr className="border-b border-slate-200 bg-slate-50 text-xs font-semibold uppercase tracking-wide text-slate-500">
-              <th className="px-4 py-2.5">Name</th>
-              <th className="px-4 py-2.5">Last updated</th>
-              <th className="px-4 py-2.5">Nodes</th>
-              <th className="px-4 py-2.5">Edges</th>
-              <th className="px-4 py-2.5 text-right">Actions</th>
+            <tr className="border-b border-slate-200 bg-slate-50 text-xs">
+              <SortableHeader
+                column="name"
+                label="Name"
+                sort={sort}
+                onToggle={toggleColumnSort}
+              />
+              <SortableHeader
+                column="updatedAt"
+                label="Last updated"
+                sort={sort}
+                onToggle={toggleColumnSort}
+              />
+              <SortableHeader
+                column="nodeCount"
+                label="Nodes"
+                sort={sort}
+                onToggle={toggleColumnSort}
+              />
+              <SortableHeader
+                column="edgeCount"
+                label="Edges"
+                sort={sort}
+                onToggle={toggleColumnSort}
+              />
+              <th className="px-4 py-2.5 text-right font-semibold uppercase tracking-wide text-slate-500">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -87,7 +149,14 @@ export function JourneysListPage({ onOpenJourney }: Props) {
                 </td>
               </tr>
             ) : null}
-            {(journeysQuery.data ?? []).map((j) => (
+            {journeysQuery.data && journeysQuery.data.length > 0 && filteredCount === 0 ? (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-slate-400">
+                  No journeys match "{query}".
+                </td>
+              </tr>
+            ) : null}
+            {pageItems.map((j) => (
               <tr
                 key={j.id}
                 className="border-b border-slate-100 last:border-0 hover:bg-slate-50"
@@ -134,6 +203,14 @@ export function JourneysListPage({ onOpenJourney }: Props) {
             ))}
           </tbody>
         </table>
+        <PaginationFooter
+          page={page}
+          totalPages={totalPages}
+          onPageChange={setPage}
+          totalCount={totalCount}
+          filteredCount={filteredCount}
+          itemLabel={totalCount === 1 ? "journey" : "journeys"}
+        />
       </div>
     </div>
   );
