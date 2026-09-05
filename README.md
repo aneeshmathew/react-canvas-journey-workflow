@@ -93,7 +93,7 @@ src/
 - **`App`** — Owns which top-level view is showing (`journeys` | `events` | `editor`), all inside one shared `AppShell` so the nav rail's active state stays consistent. This is the app's only "router" — there's no URL-based routing library; view state is plain React state.
 - **`JourneysListPage`** — The landing page: a data grid of every journey (name, last updated, node/edge counts) with Create/Edit/Delete. Opening or creating a journey hands its id to `JourneyBuilder`.
 - **`EventsListPage`** — Same list-first pattern as Journeys: a data grid of events, "+ New event," and click-a-row-to-edit. Not a modal — a full page, consistent with Journeys.
-- **`JourneyBuilder`** — Wraps one journey's editor in `ReactFlowProvider`, given a `journeyId` and an `onBack` callback. Hosts `JourneyEditorHeader`, `JourneyPropertiesPanel`, the secondary authoring toolbar (New/Import/Export/Simulation/Dry run/Publish/History/Undo/Redo/Copy/Paste/Save as Fragment), and **`FlowCanvas`**, which owns all canvas rendering and wires the Zustand store to React Flow for that specific journey.
+- **`JourneyBuilder`** — Wraps one journey's editor in `ReactFlowProvider`, given a `journeyId` and an `onBack` callback. Hosts `JourneyEditorHeader`, `JourneyPropertiesPanel`, the secondary authoring toolbar (Clear canvas/Import/Export/Simulation/Dry run/Publish/History/Undo/Redo/Copy/Paste/Save as Fragment), and **`FlowCanvas`**, which owns all canvas rendering and wires the Zustand store to React Flow for that specific journey.
 - **`journeyStore`** (Zustand) — `nodes`, `edges`, journey name/description, viewport, selection, panel widths, undo/redo history, and the copy/paste clipboard, for **one journey's canvas at a time**. It's a module-level singleton, so switching journeys re-hydrates it explicitly (guarded by a `journeyId`-keyed ref in `JourneyBuilder`, not the store's own `hydrated` flag) rather than assuming a fresh store per journey.
 - **`Palette`** — Four accordion groups (Events, Orchestration, Actions, Fragments) plus a pinned structural "End" item, with a search filter across all of them. Drags use `dataTransfer` with either `application/reactflow` (a single node type) or a dedicated Fragment mime type (a whole saved subgraph). Drops are handled on the React Flow pane (`onDrop`/`onDragOver`).
 - **Custom nodes** (`journeyNodes.tsx`) — `EntryNode` (all 4 entry-point kinds), `AudienceNode`, `EventNode`, `EventReactionNode`, `ConditionNode` (dynamic per-branch handles), `WaitNode`, `ActionNode` (all 8 channel kinds), `EndNode`. Each uses **`useNodeValidation`** for valid/invalid styling.
@@ -201,7 +201,7 @@ Read Audience sits under **Orchestration** rather than Events: a scheduled/batch
 
 - **Left nav rail** (`AppShell`) — two destinations, both real landing pages: "Journeys" (a data grid of every journey — see `JourneysListPage`) and "Events" (a list-then-create/edit/delete catalog page — see `EventsListPage`). This app builds journeys and manages the catalog data they reference, and nothing else, so there's no reason to build out placeholder nav sections for capabilities that don't exist yet.
 - **Journey editor header** (`JourneyEditorHeader`) — a working Back button (returns to the Journeys landing page), name, Draft/Version/saved status, Alerts (wired to real validation output), Test mode, Delete, and a properties-panel toggle. "Manage access" is an intentionally disabled stub — there's no multi-user/permissions model in this authoring tool.
-- **Secondary toolbar** — the authoring conveniences that aren't part of the header concept above: New/Import/Export, Simulation/Dry run/Publish/History, Undo/Redo, Copy/Paste/Save as Fragment. Every button pairs an icon with its label. No dedicated zoom controls here — React Flow's own `<Controls>` (bottom-left of the canvas) already covers zoom in/out/fit-view, so a second zoom control in the toolbar was redundant.
+- **Secondary toolbar** — the authoring conveniences that aren't part of the header concept above: Clear canvas/Import/Export, Simulation/Dry run/Publish/History, Undo/Redo, Copy/Paste/Save as Fragment. Every button pairs an icon with its label. No dedicated zoom controls here — React Flow's own `<Controls>` (bottom-left of the canvas) already covers zoom in/out/fit-view, so a second zoom control in the toolbar was redundant.
 
 ---
 
@@ -220,13 +220,13 @@ Honest status of every area this app's design touches, so nothing reads as more 
 | Testing | 3 distinct modes: Simulation, Test mode, Dry run | Test mode's branch resolution is manual (a person clicks the path) since Condition branches are named, not rule-expressions — there's nothing to evaluate a profile against automatically |
 | Publish | Compiles a real (best-effort) n8n workflow structurally; publish history view | Nothing "goes live" — there's no execution backend, real or mock, for a published journey to actually run against |
 | Reporting | — | Not built, and not faked — see Non-goals |
-| Data model | Events are a real, persisted, user-manageable catalog with create/edit/delete (`EventsManagerModal`); Audiences and Message templates are still a fixed mock list feeding Inspector `<datalist>` suggestions | No real typed *reference* even for Events — an event-based node stores the event's name as free text, not a link to its catalog id, so renaming an event doesn't update nodes that already reference the old name. Event id type and Timeout fields are captured but not used by validation/simulation yet. |
+| Data model | Events are a real, persisted, user-manageable catalog with create/edit/delete (`EventsListPage`); Audiences and Message templates are still a fixed mock list feeding Inspector `<datalist>` suggestions | No real typed *reference* even for Events — an event-based node stores the event's name as free text, not a link to its catalog id, so renaming an event doesn't update nodes that already reference the old name. Event id type and Timeout fields are captured but not used by validation/simulation yet. |
 | Journey Fragments | Save-selection-as-fragment, browse/drag from palette, insert with fresh ids | No rename/edit of a saved fragment after creation (delete only) |
 | Reaction events | Modeled with a reaction kind (opened/clicked/bounced/unsubscribed) | No structural link to the specific prior Action node it reacts to — only a free-text hint |
 | State management | Zustand store with undo/redo, copy/paste clipboard | Undo/redo covers structural edits and Inspector save/close, not every keystroke while a field is focused |
 | Async data | TanStack Query + mock API layer throughout | Backed by `localStorage`, not a real backend |
 | Styling system | Tailwind used for all newer components | Coexists with the original hand-written CSS for older ones rather than having fully replaced it |
-| Multi-journey support | ✅ Real: a data grid (`JourneysListPage`) lists every journey, each with its own full document under its own `localStorage` key; create/edit/delete all work | No search/filter/sort/pagination on the grid yet; no folders or tags |
+| Multi-journey support | ✅ Real: a data grid (`JourneysListPage`) lists every journey, each with its own full document under its own `localStorage` key; create/edit/delete all work; navigation persists across refresh via a hash-based URL (`lib/route.ts`) | No search/filter/sort/pagination on the grid yet; no folders or tags |
 
 ---
 
@@ -287,6 +287,26 @@ Four changes requested together, addressed as one pass since they touch the same
 2. **Events also became a landing page, not a modal** (`EventsListPage`), for the same list-first-then-create/edit/delete pattern as Journeys — consistent navigation model across both catalog types. `AppShell` now owns navigation between three views (Journeys list / Events list / one journey's editor) as plain React state in `App.tsx`, not a router library; the old `EventsManagerModal` was removed.
 3. **Toolbar buttons got icons + labels**, and the **separate zoom control was removed** from the toolbar — React Flow's own `<Controls>` (bottom-left of the canvas) already provides zoom in/out/fit-view, so a second one in the toolbar was redundant, not an intentional two-tier zoom design.
 4. **Canvas nodes were rendering oversized.** The actual CSS-defined node size (`.journey-node`, ~120px wide) wasn't the problem; `fitView`'s default behavior zooms in as far as `maxZoom` allows to fill the viewport, and with only one or two small nodes on an empty canvas it was zooming in close to the 2.5x ceiling — a real node rendering ~300px on screen. Fixed by capping the *initial fit's* zoom specifically (`fitViewOptions={{ maxZoom: 1 }}`) rather than lowering the canvas's overall `maxZoom`, which would have made intentional zooming-in less useful. Node CSS was also trimmed modestly (smaller padding/font) for a denser look independent of the zoom fix.
+
+---
+
+## Remaining work (prioritized)
+
+Everything below is also reflected in the Gap analysis table above; this is the same list turned into an actionable, ordered checklist so it's clear what's being worked on next rather than just "known to be incomplete." Checked off as each ships, with a note on how — not silently marked done.
+
+1. [x] **URL/refresh persistence for navigation.** Fixed: `lib/route.ts` reads/writes `window.location.hash` (`#/journeys`, `#/events`, `#/journey/<id>`) — no routing library, just `App.tsx` syncing state to `history.pushState` and listening for `hashchange` (covers back/forward too). Refreshing, bookmarking, or sharing a journey's URL now reopens that exact journey instead of dropping back to the list. 10 new tests in `route.test.ts` for the parse/serialize round-trip, including malformed-hash fallback.
+2. [x] **Clarify "New" vs. "+ New journey."** Fixed, and a real bug came with it: the toolbar button was renamed **"Clear canvas"** (resets *this* journey's canvas to a blank entry node — same underlying action as before, just honestly labeled) with a tooltip explicitly contrasting it with the landing page's "+ New journey." While fixing this, found that the header's **"Delete" button didn't actually delete anything** — it silently called the same clear-canvas action, so "Delete" and the old "New" were the exact same operation under two different labels. Now Delete calls `useDeleteJourneyMutation` for real, removes the journey from the collection, and navigates back to the Journeys list — distinct from Clear canvas in both label and behavior, not just label.
+3. [ ] **Audiences and Message templates as real catalogs.** Only Events got the real create/edit/delete treatment; Audiences and Templates are still the original static mock list. Extending the same pattern (persisted catalog + landing page) would make all three consistent.
+4. [ ] **Search/filter/sort/pagination on the Journeys and Events grids.** Fine at the current scale (a handful of rows); would matter once either list grows.
+5. [ ] **Event → node linkage by id, not name.** An event-based node stores an event's *name* as free text; renaming an event in the catalog doesn't update journeys that already reference the old name.
+6. [ ] **Richer per-channel Action schemas.** Each of the 8 channels collects one generic content field; real per-channel config (Push title+body+deep-link, a real code editor for Code-based experiences, etc.) is deeper than this app models today.
+7. [ ] **Journey Fragment rename/edit after creation** (currently delete-only).
+8. [ ] **Reaction-event structural linkage** to the specific prior Action node it reacts to (currently a free-text note only).
+
+Lower priority / larger architectural lifts, not next in line but tracked:
+- Test mode's automatic branch resolution (would require a real rule-expression engine behind Condition branches, not just names)
+- An execution backend for published journeys (nothing "goes live" today)
+- Full reporting/analytics (see Non-goals — deliberately not faked in the meantime)
 
 ---
 
