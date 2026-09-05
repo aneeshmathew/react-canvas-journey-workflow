@@ -67,6 +67,7 @@ import {
   useSaveJourneyMutation,
   useFragmentsQuery,
   useSaveFragmentMutation,
+  useDeleteJourneyMutation,
 } from "@/hooks/queries/useJourneyQueries";
 
 const nodeTypes = {
@@ -191,6 +192,7 @@ function FlowCanvas({
   const journeyQuery = useJourneyQuery(journeyId);
   const saveMutation = useSaveJourneyMutation(journeyId);
   const publishMutation = usePublishJourneyMutation(journeyId);
+  const deleteJourneyMutation = useDeleteJourneyMutation();
   const fragmentsQuery = useFragmentsQuery();
   const saveFragmentMutation = useSaveFragmentMutation();
 
@@ -593,7 +595,14 @@ function FlowCanvas({
     }
   };
 
-  const newJourney = () => {
+  const clearCanvas = () => {
+    if (
+      !window.confirm(
+        "Clear this journey's canvas back to a blank entry node? This can't be undone. (To work on a different journey instead, go back to the Journeys list.)",
+      )
+    ) {
+      return;
+    }
     setSimulation(null);
     setDryRunModal(null);
     setDryRunError(null);
@@ -681,10 +690,10 @@ function FlowCanvas({
         onDelete={() => {
           if (
             window.confirm(
-              "Clear this journey and start a new one? This can't be undone.",
+              `Delete "${journeyName}"? This removes the journey entirely and can't be undone.`,
             )
           ) {
-            newJourney();
+            deleteJourneyMutation.mutate(journeyId, { onSuccess: onBack });
           }
         }}
         onOpenTestMode={() => setTestModeOpen(true)}
@@ -712,8 +721,8 @@ function FlowCanvas({
         onClose={() => setPropertiesOpen(false)}
       />
       <div className="app-toolbar" role="toolbar" aria-label="Authoring tools">
-        <button type="button" onClick={newJourney} title="Clear the canvas and start over">
-          <span aria-hidden="true">📄</span> New
+        <button type="button" onClick={clearCanvas} title="Clear this journey's canvas back to a blank entry node (does not delete the journey — use Delete in the header for that)">
+          <span aria-hidden="true">🧹</span> Clear canvas
         </button>
         <label className="file-btn" title="Import a journey JSON file">
           <span aria-hidden="true">📥</span> Import
