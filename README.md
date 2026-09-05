@@ -311,12 +311,19 @@ Everything below is also reflected in the Gap analysis table above; this is the 
 Lower priority / larger architectural lifts, not next in line but tracked:
 - Test mode's automatic branch resolution (would require a real rule-expression engine behind Condition branches, not just names)
 - An execution backend for published journeys (nothing "goes live" today)
-- Full reporting/analytics (see Non-goals — deliberately not faked in the meantime)
+- Full reporting/analytics (see [Non-goals](#non-goals) — deliberately not faked in the meantime)
 
 ---
-Remaining, in order:
-4. Search/filter/sort/pagination on the Journeys and Events grids
-5. Catalog → node linkage by id, not name (affects all three catalogs now)
-6. Richer per-channel Action schemas
-7. Journey Fragment rename/edit after creation
-8. Reaction-event structural linkage
+
+## Non-goals
+
+Things this app deliberately does **not** do, so they don't get mistaken for oversights:
+
+- **A real execution/runtime backend.** Nothing "goes live" — Publish compiles a structural n8n workflow and downloads it; nothing here calls n8n or any other runtime. See [n8n in this project](#n8n-in-this-project).
+- **Fabricated reporting/analytics.** No "emails sent," "open rate," or similar business metrics anywhere. Publish history shows only structural facts (node/edge counts, compiler-warning count) that the app can actually vouch for.
+- **A rule-expression engine for Condition branches.** Branches are named, not evaluated against profile attributes — Test mode's branch resolution is intentionally manual (a person picks the path) rather than simulating a fake evaluator.
+- **Multi-user / permissions.** This is a single-user authoring tool. "Manage access" in the journey header is an intentionally disabled stub, and Event "Author" is a fixed placeholder, not a real identity system.
+- **A routing library.** Navigation (`journeys` / `events` / `editor` views, plus which journey is open) is plain React state in `App.tsx`, synced to `window.location.hash` by `lib/route.ts` for refresh/back-forward support — not React Router or similar.
+- **Real n8n installation or execution.** The n8n adapter is a best-effort structural compiler only; nothing in this repo installs, imports into, or talks to an n8n instance.
+
+---
